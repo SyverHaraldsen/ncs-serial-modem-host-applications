@@ -9,25 +9,28 @@ state STATE_CLOUD_CONNECTED #FFFFFF {
     state STATE_SYNC_IDLE
     STATE_SYNC_IDLE : entry / cloud_sync_schedule()
 
-    state STATE_SYNC_DEMO
-    STATE_SYNC_DEMO : entry / publish CLOUD_MESSAGE_SEND
+    state STATE_SYNCING #FFFFFF {
+        state STATE_SYNC_DEMO
+        STATE_SYNC_DEMO : entry / publish CLOUD_MESSAGE_SEND
 
-    state STATE_SYNC_LOCATION #FFFFFF;line:94A3B8;line.dashed
-    STATE_SYNC_LOCATION : <i>CONFIG_APP_LOCATION</i>
-    STATE_SYNC_LOCATION : entry / publish LOCATION_SEARCH_TRIGGER
+        state STATE_SYNC_LOCATION #FFFFFF;line:94A3B8;line.dashed
+        STATE_SYNC_LOCATION : <i>CONFIG_APP_LOCATION</i>
+        STATE_SYNC_LOCATION : entry / publish LOCATION_SEARCH_TRIGGER
 
-    state STATE_SYNC_SHADOW
-    STATE_SYNC_SHADOW : entry / publish CLOUD_SHADOW_POLL_REQUEST
+        state STATE_SYNC_SHADOW
+        STATE_SYNC_SHADOW : entry / publish CLOUD_SHADOW_POLL_REQUEST
 
-    state STATE_SYNC_FOTA #FFFFFF;line:94A3B8;line.dashed
-    STATE_SYNC_FOTA : <i>CONFIG_APP_FOTA</i>
-    STATE_SYNC_FOTA : entry / cloud_sync_cancel()
-    STATE_SYNC_FOTA : entry / publish FOTA_POLL_REQUEST
+        state STATE_SYNC_FOTA #FFFFFF;line:94A3B8;line.dashed
+        STATE_SYNC_FOTA : <i>CONFIG_APP_FOTA</i>
+        STATE_SYNC_FOTA : entry / cloud_sync_cancel()
+        STATE_SYNC_FOTA : entry / publish FOTA_POLL_REQUEST
 
-    state STATE_SYNC_MEMFAULT
-    STATE_SYNC_MEMFAULT : entry / publish CLOUD_MEMFAULT_POST_REQUEST
+        state STATE_SYNC_MEMFAULT
+        STATE_SYNC_MEMFAULT : entry / publish CLOUD_MEMFAULT_POST_REQUEST
 
-    [*] --> STATE_SYNC_DEMO
+        [*] --> STATE_SYNC_DEMO
+    }
+    STATE_SYNCING : entry / publish LED_RGB_SET (green blink)
 
     STATE_SYNC_DEMO -[#94A3B8,dashed]-> STATE_SYNC_LOCATION : CLOUD_MESSAGE_SENT
     STATE_SYNC_LOCATION -[#94A3B8,dashed]-> STATE_SYNC_SHADOW : LOCATION_SEARCH_DONE

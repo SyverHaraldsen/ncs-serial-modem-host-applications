@@ -8,6 +8,9 @@
 / {
 	aliases {
 		modem = &modem;
+		led-red = &led1;
+		led-green = &led2;
+		led-blue = &led0;
 	};
 	chosen {
 		/* Switch console to uart20 */
@@ -32,15 +35,6 @@
 	 * the link would sleep on DTR/RI alone, and a command that is slow to answer, such as
 	 * AT%WIFISCAN, then loses its reply and the PPP link drops with NO CARRIER.
 	 */
-};
-
-/* The LEDs are unused. Drive them low instead of leaving the pins floating. */
-&gpio2 {
-	led-off {
-		gpio-hog;
-		gpios = <8 GPIO_ACTIVE_HIGH>, <9 GPIO_ACTIVE_HIGH>, <10 GPIO_ACTIVE_HIGH>;
-		output-low;
-	};
 };
 
 &psa_rng {

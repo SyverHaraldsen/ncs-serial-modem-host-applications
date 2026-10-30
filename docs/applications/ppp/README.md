@@ -40,6 +40,7 @@ The application follows the shared [Architecture](../../architecture.md). It con
 - **[Location module](modules/location.md)**: Collects Wi-Fi and cell measurements for the nRF Cloud location service, with one backend per board type.
 - **Battery module**: Samples the nPM1300 fuel gauge. Only built on the nRF93M1 DK.
 - **Buttons module**: Publishes DK button presses, and their `button` shell equivalents, on `button_chan`. It has no state machine or thread of its own. See [Buttons and shell commands](application-behavior.md#buttons-and-shell-commands).
+- **LED module**: Drives the host RGB LED with the color and blink pattern that the Main module publishes on `led_chan`. Only built on the nRF93M1 DK. See [LED indication](application-behavior.md#led-indication).
 - **Modem AT module**: Serializes access to the modem AT pipe behind `modem_at_run()`. It has no zbus channel and no state machine, and is called directly by the Location module's modem AT backend and the host shell. See [Reaching Serial Modem AT commands](#reaching-serial-modem-at-commands).
 
 The following diagram shows how the modules interact. Each module owns one channel, and both the requests sent to a module and the notifications it publishes go on that channel.

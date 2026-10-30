@@ -42,6 +42,7 @@ target_sources_ifdef(CONFIG_APP_MODEM_POWER app PRIVATE src/modules/modem_power/
 target_sources_ifdef(CONFIG_APP_MODEM_AT_SHELL app PRIVATE src/modules/modem_at/modem_at_shell.c)
 target_sources_ifdef(CONFIG_APP_BUTTONS app PRIVATE src/modules/buttons/buttons.c)
 target_sources_ifdef(CONFIG_APP_BUTTONS_SHELL app PRIVATE src/modules/buttons/buttons_shell.c)
+target_sources_ifdef(CONFIG_APP_LED app PRIVATE src/modules/led/led.c)
 target_sources_ifdef(CONFIG_APP_LOCATION_SHELL app PRIVATE
 	src/modules/location/location_shell.c
 )

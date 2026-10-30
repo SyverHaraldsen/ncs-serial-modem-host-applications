@@ -52,6 +52,19 @@ The console also offers these shell commands:
 | `location search` / `location cancel` | Start a Wi-Fi location search now, or cancel an ongoing one. Only available with the location overlay. |
 | `at "<command>"` | Send an AT command to the modem and print the response. |
 
+## LED indication
+
+On the nRF93M1 DK, the Main module sets the host RGB LED on the nRF54L15 side from its state:
+
+| State | LED |
+| --- | --- |
+| Cloud not connected, or not able to connect | Red, 250 ms blink every 5 s |
+| Cloud synchronization running | Green, 250 ms blink |
+| Idle between synchronizations | Yellow, 50 ms pulse every 15 s |
+| FOTA download in progress | Purple, on |
+
+The LED module is enabled when the board devicetree defines the `led-red`, `led-green`, and `led-blue` aliases (`CONFIG_APP_LED`).
+
 ## Remote debugging
 
 The Memfault SDK is configured for software type `smha-91m1` on the nRF54 hosts and `smha-93m1` on the nRF93M1 DK, and uploads through nRF Cloud CoAP (`CONFIG_MEMFAULT_USE_NRF_CLOUD_COAP`). The SDK collects heartbeat metrics on its internal timer and uploads data every hour (`CONFIG_MEMFAULT_PERIODIC_UPLOAD`). The cloud module also posts pending data on every cloud synchronization, when main asks for it with `CLOUD_MEMFAULT_POST_REQUEST`. Coredumps are RAM-backed (32 KB) and carry the Memfault log buffer. See [Remote debugging with nRF Cloud](remote-debugging.md) for nRF Cloud setup.

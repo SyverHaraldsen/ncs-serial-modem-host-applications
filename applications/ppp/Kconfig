@@ -15,6 +15,7 @@ rsource "src/modules/modem_at/Kconfig.modem_at"
 rsource "src/modules/modem_power/Kconfig.modem_power"
 rsource "src/modules/location/Kconfig.location"
 rsource "src/modules/buttons/Kconfig.buttons"
+rsource "src/modules/led/Kconfig.led"
 
 # Redefine symbol due to it being dependent on nRF Modem Library in the original definition.
 config MEMFAULT_USE_NRF_CLOUD_COAP
