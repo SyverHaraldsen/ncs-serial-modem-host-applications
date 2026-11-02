@@ -20,6 +20,7 @@ venv
 sanity-out*
 twister-out*
 .cursor
+.claude
 
 # CI output
 compliance.xml
