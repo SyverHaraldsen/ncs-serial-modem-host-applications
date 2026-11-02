@@ -61,7 +61,7 @@ On the nRF93M1 DK, the Main module sets the host RGB LED on the nRF54L15 side fr
 | Cloud not connected, or not able to connect | Red, 250 ms blink every 5 s |
 | Cloud synchronization running | Green, 250 ms blink |
 | Idle between synchronizations | Yellow, 50 ms pulse every 15 s |
-| FOTA download in progress | Purple, on |
+| FOTA download in progress | Purple, 100 ms pulse every second |
 
 The LED module is enabled when the board devicetree defines the `led-red`, `led-green`, and `led-blue` aliases (`CONFIG_APP_LED`).
 

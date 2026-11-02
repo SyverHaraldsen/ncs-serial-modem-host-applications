@@ -116,11 +116,13 @@ static const struct led_msg led_pattern_idle = {
 	.repetitions = -1,
 };
 
-/** Solid purple while a FOTA download is in progress. */
+/** Short purple pulse every second while a FOTA download is in progress. */
 static const struct led_msg led_pattern_fota = {
 	.type = LED_RGB_SET,
 	.red = 255,
 	.blue = 255,
+	.duration_on_msec = 100,
+	.duration_off_msec = 900,
 	.repetitions = -1,
 };
 #endif /* CONFIG_APP_LED */
