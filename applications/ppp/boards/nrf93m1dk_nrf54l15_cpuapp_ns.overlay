@@ -31,6 +31,10 @@
 &modem {
 	status = "okay";
 	zephyr,pm-device-runtime-auto;
+	/* A host reset leaves the modem powered and in CMUX mode, so the init script gets no
+	 * reply and only the recovery reset brings it back, 15 s later. Reset it on every start.
+	 */
+	zephyr,mdm-reset-behavior = "toggle_on_resume", "toggle_on_recovery";
 	/* CMUX runtime power save is left off. The nRF93M1 rejects the in-band PSC command, so
 	 * the link would sleep on DTR/RI alone, and a command that is slow to answer, such as
 	 * AT%WIFISCAN, then loses its reply and the PPP link drops with NO CARRIER.
