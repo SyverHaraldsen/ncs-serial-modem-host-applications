@@ -78,7 +78,7 @@ Because a firmware download and the reboot that follows must not be interrupted 
 
 ## Messages
 
-The Main module defines the private channel `main_priv_chan` and publishes requests on the other modules' channels. It has no public channel and no output messages of its own.
+The Main module defines the private channel `main_priv_chan` and publishes requests on the other modules' channels.
 
 ## Configurations
 

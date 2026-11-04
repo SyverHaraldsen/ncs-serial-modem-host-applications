@@ -17,7 +17,7 @@ The host does not use PPP. With PPP running, the Serial Modem hands all downlink
 |----------|--------------|--------------|
 | nRF54LM20B DK wired to an nRF9151 DK running Serial Modem | `nrf54lm20dk/nrf54lm20b/cpuapp/ns` | VCOM0 (`uart30`) |
 
-The Serial Modem link uses `uart21` with hardware flow control, DTR (P1.11) and nRESET (P1.10), with the same wiring as the [PPP Host Application](../../getting-started/ppp-nrf54.md#34-wire-the-dks-together). The host pulses nRESET at boot and keeps DTR asserted, so the Serial Modem UART stays enabled. RI is not used.
+The Serial Modem link uses `uart21` with hardware flow control, DTR (P1.11) and nRESET (P1.10), with the same wiring as the [PPP Host Application](../../getting-started/ppp-nrf54.md#34-wire-the-dks-together). The host pulses nRESET at boot and keeps DTR asserted, so the Serial Modem UART stays enabled.
 
 ## Modules
 

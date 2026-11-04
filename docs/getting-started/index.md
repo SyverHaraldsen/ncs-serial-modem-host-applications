@@ -6,7 +6,7 @@ This guide takes you from an unboxed development kit (DK) to a device that sends
 
 ## Step 1: Choose your application
 
-1. Make sure you have the following before you start, so you do not get stuck halfway:
+1. Make sure you have the following before you start:
 
     - A SIM card with a data plan.
     - An [nRF Cloud](https://nrfcloud.nordicsemi.com/) account.

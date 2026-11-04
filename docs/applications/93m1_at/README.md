@@ -41,7 +41,7 @@ The console offers these shell commands:
 | `network connect` / `network disconnect` | Bring the cellular link up or down. |
 | `button 1` / `button 2` | Simulate a press of the matching DK button. |
 
-Pressing **Button 1** (or running `button 1`) starts a sync right away instead of waiting for the next interval. **Button 2** has no action yet.
+Pressing **Button 1** (or running `button 1`) starts a sync right away instead of waiting for the next interval.
 
 ## Troubleshooting
 

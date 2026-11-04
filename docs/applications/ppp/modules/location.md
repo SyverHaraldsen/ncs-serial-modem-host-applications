@@ -17,7 +17,7 @@ The Location library is configured to use an external cloud service for position
 
 Finding access points is treated as a successful search, regardless of whether the cloud can resolve them. The module therefore cancels the ongoing request as soon as the scan data has been published, which stops the Location library from falling back to another positioning method.
 
-A search trigger that arrives while a search is already active is ignored, so a scan that takes longer than the application's synchronization period simply results in fewer position updates.
+A search trigger that arrives while a search is already active is ignored, so a scan that takes longer than the application's synchronization period results in fewer position updates.
 
 > [!NOTE]
 > `CONFIG_LOCATION_DATA_DETAILS` cannot be enabled in this application, because it makes `<modem/location.h>` include nRF Modem GNSS headers that only exist when the nRF Modem Library is built, and the modem is external on the host. As a result, the Location library never emits `LOCATION_EVT_CANCELLED`, and the module completes a canceled search from its own context instead.
