@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import io
+import json
+import socket
+from unittest.mock import MagicMock, patch
+from urllib.error import HTTPError, URLError
 
 import pytest
 
 from utils.serial_modem_firmware import (
+    NETWORK_ATTEMPTS,
+    _github_api_request,
     clear_serial_modem_release_cache,
     load_serial_modem_firmware_config,
     resolve_serial_modem_release,
@@ -196,3 +202,63 @@ def test_resolve_pinned_tag_missing_asset() -> None:
     ):
         with pytest.raises(RuntimeError, match="has no asset ending with"):
             resolve_serial_modem_release("v9.9.0")
+
+
+def _json_response(payload: object) -> MagicMock:
+    response = MagicMock()
+    response.__enter__.return_value = io.BytesIO(json.dumps(payload).encode())
+    return response
+
+
+def _http_error(code: int) -> HTTPError:
+    return HTTPError("https://api.github.com", code, "error", {}, io.BytesIO(b"{}"))
+
+
+@patch("utils.serial_modem_firmware.time.sleep")
+def test_github_api_request_retries_dns_failure(sleep: MagicMock) -> None:
+    dns_error = URLError(socket.gaierror(-5, "No address associated with hostname"))
+    with patch(
+        "utils.serial_modem_firmware.urlopen",
+        side_effect=[dns_error, _json_response({"ok": True})],
+    ) as urlopen:
+        assert _github_api_request("https://api.github.com/x") == {"ok": True}
+
+    assert urlopen.call_count == 2
+    sleep.assert_called_once()
+
+
+@patch("utils.serial_modem_firmware.time.sleep")
+def test_github_api_request_gives_up_after_all_attempts(sleep: MagicMock) -> None:
+    with patch(
+        "utils.serial_modem_firmware.urlopen",
+        side_effect=URLError("down"),
+    ) as urlopen:
+        with pytest.raises(URLError):
+            _github_api_request("https://api.github.com/x")
+
+    assert urlopen.call_count == NETWORK_ATTEMPTS
+    assert sleep.call_count == NETWORK_ATTEMPTS - 1
+
+
+@patch("utils.serial_modem_firmware.time.sleep")
+def test_github_api_request_does_not_retry_client_errors(sleep: MagicMock) -> None:
+    with patch(
+        "utils.serial_modem_firmware.urlopen",
+        side_effect=_http_error(404),
+    ) as urlopen:
+        with pytest.raises(RuntimeError, match="404"):
+            _github_api_request("https://api.github.com/x")
+
+    assert urlopen.call_count == 1
+    sleep.assert_not_called()
+
+
+@patch("utils.serial_modem_firmware.time.sleep")
+def test_github_api_request_retries_server_errors(sleep: MagicMock) -> None:
+    with patch(
+        "utils.serial_modem_firmware.urlopen",
+        side_effect=[_http_error(502), _json_response([])],
+    ) as urlopen:
+        assert _github_api_request("https://api.github.com/x") == []
+
+    assert urlopen.call_count == 2

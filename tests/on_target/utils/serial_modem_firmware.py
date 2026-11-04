@@ -5,9 +5,12 @@ from __future__ import annotations
 
 import json
 import os
+import time
 import zipfile
+from collections.abc import Callable
 from pathlib import Path
-from urllib.error import HTTPError
+from typing import TypeVar
+from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen, urlretrieve
 
 import yaml
@@ -19,6 +22,12 @@ from utils.logger import get_logger
 logger = get_logger()
 
 GITHUB_API = "https://api.github.com"
+
+NETWORK_TIMEOUT_SECONDS = 30
+NETWORK_ATTEMPTS = 4
+NETWORK_BACKOFF_SECONDS = 5.0
+
+_T = TypeVar("_T")
 
 # A single test flashes the modem, reads the console baud rate, and may extract
 # the bundle, each of which needs the resolved release. Without this the same
@@ -44,6 +53,34 @@ def _github_token() -> str | None:
     return None
 
 
+def _is_transient(exc: OSError) -> bool:
+    if isinstance(exc, HTTPError):
+        return exc.code >= 500
+    return isinstance(exc, (URLError, TimeoutError))
+
+
+def _with_network_retry(description: str, operation: Callable[[], _T]) -> _T:
+    """Run *operation*, retrying DNS, connection and 5xx failures with backoff."""
+    delay = NETWORK_BACKOFF_SECONDS
+    for attempt in range(1, NETWORK_ATTEMPTS + 1):
+        try:
+            return operation()
+        except (URLError, TimeoutError) as exc:
+            if not _is_transient(exc) or attempt == NETWORK_ATTEMPTS:
+                raise
+            logger.warning(
+                "%s failed (%s), retrying in %.0fs (%d/%d)",
+                description,
+                exc,
+                delay,
+                attempt,
+                NETWORK_ATTEMPTS,
+            )
+            time.sleep(delay)
+            delay *= 2
+    raise AssertionError("unreachable")
+
+
 def _github_api_request(url: str) -> object:
     headers = {
         "Accept": "application/vnd.github+json",
@@ -54,9 +91,13 @@ def _github_api_request(url: str) -> object:
         headers["Authorization"] = f"Bearer {token}"
 
     request = Request(url, headers=headers)
-    try:
-        with urlopen(request) as response:
+
+    def fetch() -> object:
+        with urlopen(request, timeout=NETWORK_TIMEOUT_SECONDS) as response:
             return json.load(response)
+
+    try:
+        return _with_network_retry(f"GitHub API request {url}", fetch)
     except HTTPError as exc:
         body = exc.read().decode("utf-8", errors="replace")
         raise RuntimeError(f"GitHub API request failed ({exc.code}): {body}") from exc
@@ -183,7 +224,12 @@ def download_serial_modem_bundle(*, root: Path | None = None) -> Path:
             config["release"],
             config["download_url"],
         )
-        urlretrieve(config["download_url"], zip_path)
+        partial_path = zip_path.with_name(f"{zip_path.name}.part")
+        _with_network_retry(
+            f"Serial Modem firmware download {config['download_url']}",
+            lambda: urlretrieve(config["download_url"], partial_path),
+        )
+        partial_path.replace(zip_path)
 
     return zip_path
 
