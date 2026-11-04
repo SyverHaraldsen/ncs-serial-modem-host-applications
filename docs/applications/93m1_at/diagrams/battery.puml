@@ -1,0 +1,38 @@
+@startuml
+' SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+' Battery module sampling routine and the battery sync step, in
+' applications/93m1_at/src/modules/battery/battery.c and src/main.c.
+!include style.puml
+
+box "Host application" #FFFFFF
+    participant "main()" as Main
+    participant "Battery\nmodule" as Battery
+    participant "sample_work\n(system workqueue)" as Work
+    participant "Cloud\nmodule" as Cloud
+end box
+participant "nRF Cloud" as Cloud9
+
+== Startup ==
+Battery -> Battery : fuel_gauge_setup()\nfirst sample
+Battery -> Work : sample_schedule()
+
+== Every CONFIG_APP_BATTERY_SAMPLE_INTERVAL seconds ==
+Work -> Battery : BATTERY_PRIV_SAMPLE\n(battery_priv_chan)
+Battery -> Battery : battery_sample()
+Battery -> Work : sample_schedule()
+
+== STATE_SYNC_BATTERY_READ ==
+Main -> Battery : BATTERY_PERCENT_REQUEST
+alt valid sample
+    Battery -> Main : BATTERY_PERCENT_RESPONSE (percent)
+else no valid sample
+    Battery -> Main : BATTERY_PERCENT_UNAVAILABLE
+    note over Main : back to STATE_SYNC_IDLE
+end
+
+== STATE_SYNC_BATTERY_SEND ==
+Main -> Cloud : CLOUD_BATTERY_SAMPLE (percent)
+Cloud -> Cloud9 : AT%NRFCLOUDMESSAGE
+Cloud -> Main : CLOUD_BATTERY_DONE
+
+@enduml

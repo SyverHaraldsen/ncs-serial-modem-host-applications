@@ -27,11 +27,15 @@ The application follows the shared [Architecture](../../architecture.md). It con
 Once the modem has attached to the network it performs a cloud sync 5 seconds after connect and then every 10 minutes (`CONFIG_APP_SYNC_BOOT_DELAY_SECONDS` and `CONFIG_APP_SYNC_INTERVAL`). Each sync runs two steps in order through the modem's nRF Cloud client, and the Main module waits for each step to finish, whether it succeeded or not, before starting the next:
 
 - **Location:** sends `AT%NRFCLOUDLOCATION=7,1`. The modem collects single-cell, multicell and Wi-Fi measurements, nRF Cloud resolves them to a position, and the result is returned to the host. Change the method with `CONFIG_APP_LOCATION_METHOD` (1 single-cell, 2 multicell, 4 Wi-Fi, or a sum of them).
-- **Battery:** sends the fuel gauge state of charge as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The Battery module samples the fuel gauge on its own every 60 seconds, whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`). If it has no valid sample yet, the step is skipped.
+- **Battery:** asks the Battery module for the state of charge with `BATTERY_PERCENT_REQUEST`, then sends the answer as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The Battery module samples the fuel gauge on its own every 60 seconds, whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`), and answers with the latest sample. If it has no valid sample, it answers `BATTERY_PERCENT_UNAVAILABLE` and the step is skipped.
 
 The Main module tracks this with a hierarchical state machine. Each sync step is its own substate of `STATE_SYNCING`, entered by publishing the request to the module and left when the module publishes that it is done. See [Diagram notation](../../architecture.md#diagram-notation) for how to read the diagram:
 
 ![Main module state machine](diagrams/main.svg)
+
+The Battery module keeps its own sampling routine. A delayed work item publishes `BATTERY_PRIV_SAMPLE` on the module's private channel, and the module thread samples the fuel gauge and schedules the next tick. Main only talks to it over `battery_chan`:
+
+![Battery sampling and the battery sync step](diagrams/battery.svg)
 
 A step whose module is not built (`CONFIG_APP_LOCATION` or `CONFIG_APP_BATTERY`) is left out of the sequence. A network disconnect ends a running sync and cancels the sync timer.
 
@@ -72,5 +76,5 @@ Pressing **Button 1** (or running `button 1`) starts a sync right away instead o
 | Device listed under **Fleet → Devices**, but no location or messages visible | The device has not completed a synchronization yet. Check that the console logs the location and battery lines described in [Verify](../../getting-started/93m1-at.md#step-6-verify), or press **Button 1** to start a synchronization right away. |
 | `modem_at: CoAP response: 4.01 Unauthorized (device may not be onboarded to nRF Cloud)` | nRF Cloud rejected the modem. Finish the [claiming steps](../../getting-started/93m1-at.md#step-5-connect-to-nrf-cloud) and check that the device is listed under your team. |
 | `location: Failed to request location, network is down?` or `cloud: Failed to sent battery data, network is down?` | The AT command failed, usually because the modem has not attached yet. Check the link with `at AT+CEREG?`. |
-| `main: battery_percent_get, error: -61` | The fuel gauge has no valid sample yet, so no battery message is sent this sync. Check that a battery is connected to the DK. |
+| `main: No valid battery sample, battery report skipped` | The fuel gauge has no valid sample, so no battery message is sent this sync. Check that a battery is connected to the DK. |
 | Location lines always report `Method: Single-cell` | Multicell and Wi-Fi positioning do not work while the modem is in RRC Connected mode, so nRF Cloud falls back to single-cell. |
