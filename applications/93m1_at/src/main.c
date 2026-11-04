@@ -63,6 +63,7 @@ ZBUS_CHAN_DEFINE(main_priv_chan,
 	X(main_priv_chan, struct priv_main_msg) \
 	X(network_chan, struct network_msg) \
 	IF_ENABLED(CONFIG_APP_LOCATION, (X(location_chan, struct location_msg))) \
+	IF_ENABLED(CONFIG_APP_BATTERY, (X(battery_chan, struct battery_msg))) \
 	IF_ENABLED(CONFIG_APP_BATTERY, (X(cloud_chan, struct cloud_msg))) \
 	IF_ENABLED(CONFIG_APP_BUTTONS, (X(button_chan, struct button_msg)))
 
@@ -137,15 +138,17 @@ enum main_app_state {
 				STATE_SYNC_LOCATION,
 #endif /* CONFIG_APP_LOCATION */
 #if defined(CONFIG_APP_BATTERY)
-				/** Reporting the battery state of charge to nRF Cloud. */
-				STATE_SYNC_BATTERY,
+				/** Requesting the latest state of charge. */
+				STATE_SYNC_BATTERY_READ,
+				/** Reporting the state of charge to nRF Cloud. */
+				STATE_SYNC_BATTERY_SEND,
 #endif /* CONFIG_APP_BATTERY */
 };
 
 #if defined(CONFIG_APP_LOCATION)
 #define STATE_SYNC_FIRST_STEP STATE_SYNC_LOCATION
 #elif defined(CONFIG_APP_BATTERY)
-#define STATE_SYNC_FIRST_STEP STATE_SYNC_BATTERY
+#define STATE_SYNC_FIRST_STEP STATE_SYNC_BATTERY_READ
 #endif
 
 /* State object for the main module. */
@@ -153,6 +156,10 @@ struct main_state {
 	struct smf_ctx ctx;
 	const struct zbus_channel *chan;
 	uint8_t msg_buf[MAX_MSG_SIZE];
+#if defined(CONFIG_APP_BATTERY)
+	/** State of charge from the battery module, sent in @ref STATE_SYNC_BATTERY_SEND. */
+	int battery_percent;
+#endif /* CONFIG_APP_BATTERY */
 };
 
 static struct main_state main_state;
@@ -184,8 +191,10 @@ static enum smf_state_result state_sync_location_run(void *obj);
 #endif /* CONFIG_APP_LOCATION */
 
 #if defined(CONFIG_APP_BATTERY)
-static void state_sync_battery_entry(void *obj);
-static enum smf_state_result state_sync_battery_run(void *obj);
+static void state_sync_battery_read_entry(void *obj);
+static enum smf_state_result state_sync_battery_read_run(void *obj);
+static void state_sync_battery_send_entry(void *obj);
+static enum smf_state_result state_sync_battery_send_run(void *obj);
 #endif /* CONFIG_APP_BATTERY */
 
 /** SMF state table */
@@ -231,9 +240,15 @@ static const struct smf_state states[] = {
 				 NULL),
 #endif /* CONFIG_APP_LOCATION */
 #if defined(CONFIG_APP_BATTERY)
-	[STATE_SYNC_BATTERY] =
-		SMF_CREATE_STATE(state_sync_battery_entry,
-				 state_sync_battery_run,
+	[STATE_SYNC_BATTERY_READ] =
+		SMF_CREATE_STATE(state_sync_battery_read_entry,
+				 state_sync_battery_read_run,
+				 NULL,
+				 &states[STATE_SYNCING],
+				 NULL),
+	[STATE_SYNC_BATTERY_SEND] =
+		SMF_CREATE_STATE(state_sync_battery_send_entry,
+				 state_sync_battery_send_run,
 				 NULL,
 				 &states[STATE_SYNCING],
 				 NULL),
@@ -292,6 +307,18 @@ static void location_fix_request(void)
 #endif /* CONFIG_APP_LOCATION */
 
 #if defined(CONFIG_APP_BATTERY)
+static void battery_percent_request(void)
+{
+	struct battery_msg msg = { .type = BATTERY_PERCENT_REQUEST };
+	int err;
+
+	err = zbus_chan_pub(&battery_chan, &msg, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub battery_chan, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+
 static void battery_report_request(int percent)
 {
 	struct cloud_msg msg = {
@@ -528,7 +555,7 @@ static enum smf_state_result state_sync_location_run(void *obj)
 
 		if (msg->type == LOCATION_FIX_DONE) {
 #if defined(CONFIG_APP_BATTERY)
-			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_BATTERY]);
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_BATTERY_READ]);
 #else
 			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
 #endif /* CONFIG_APP_BATTERY */
@@ -542,26 +569,48 @@ static enum smf_state_result state_sync_location_run(void *obj)
 #endif /* CONFIG_APP_LOCATION */
 
 #if defined(CONFIG_APP_BATTERY)
-static void state_sync_battery_entry(void *obj)
+static void state_sync_battery_read_entry(void *obj)
 {
-	struct main_state *state_object = obj;
-	int percent;
-	int err;
+	ARG_UNUSED(obj);
 
-	LOG_DBG("state_sync_battery_entry");
+	LOG_DBG("state_sync_battery_read_entry");
 
-	err = battery_percent_get(&percent);
-	if (err) {
-		LOG_WRN("battery_percent_get, error: %d", err);
-		smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
-
-		return;
-	}
-
-	battery_report_request(percent);
+	battery_percent_request();
 }
 
-static enum smf_state_result state_sync_battery_run(void *obj)
+static enum smf_state_result state_sync_battery_read_run(void *obj)
+{
+	struct main_state *state_object = obj;
+
+	if (state_object->chan == &battery_chan) {
+		const struct battery_msg *msg = (const struct battery_msg *)state_object->msg_buf;
+
+		if (msg->type == BATTERY_PERCENT_RESPONSE) {
+			state_object->battery_percent = msg->percent;
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_BATTERY_SEND]);
+
+			return SMF_EVENT_HANDLED;
+		} else if (msg->type == BATTERY_PERCENT_UNAVAILABLE) {
+			LOG_WRN("No valid battery sample, battery report skipped");
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
+
+			return SMF_EVENT_HANDLED;
+		}
+	}
+
+	return SMF_EVENT_PROPAGATE;
+}
+
+static void state_sync_battery_send_entry(void *obj)
+{
+	struct main_state *state_object = obj;
+
+	LOG_DBG("state_sync_battery_send_entry");
+
+	battery_report_request(state_object->battery_percent);
+}
+
+static enum smf_state_result state_sync_battery_send_run(void *obj)
 {
 	struct main_state *state_object = obj;
 

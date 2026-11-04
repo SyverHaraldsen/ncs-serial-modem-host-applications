@@ -13,7 +13,6 @@
 #include <nrf_fuel_gauge.h>
 
 #include "app_common.h"
-#include "battery.h"
 #include "lp803448_model.h"
 
 LOG_MODULE_REGISTER(battery, CONFIG_APP_BATTERY_LOG_LEVEL);
@@ -28,8 +27,17 @@ BUILD_ASSERT(CONFIG_APP_BATTERY_WATCHDOG_TIMEOUT_SECONDS >
 #define CHG_STATUS_CC_MASK       BIT(3)
 #define CHG_STATUS_CV_MASK       BIT(4)
 
-ZBUS_CHAN_DEFINE(battery_chan,
-		 struct battery_msg,
+/* Private channel message types for the module's own sampling routine. */
+enum priv_battery_msg_type {
+	BATTERY_PRIV_SAMPLE,
+};
+
+struct priv_battery_msg {
+	enum priv_battery_msg_type type;
+};
+
+ZBUS_CHAN_DEFINE(battery_priv_chan,
+		 struct priv_battery_msg,
 		 NULL,
 		 NULL,
 		 ZBUS_OBSERVERS_EMPTY,
@@ -37,7 +45,7 @@ ZBUS_CHAN_DEFINE(battery_chan,
 
 ZBUS_MSG_SUBSCRIBER_DEFINE(battery);
 
-#define CHANNEL_LIST(X) X(battery_chan, struct battery_msg)
+#define CHANNEL_LIST(X) X(battery_priv_chan, struct priv_battery_msg)
 
 #define MAX_MSG_SIZE MAX_MSG_SIZE_FROM_LIST(CHANNEL_LIST)
 
@@ -219,25 +227,29 @@ static void battery_sample(const struct device *charger, int64_t *ref_time,
 		vbus ? "VBUS" : "battery");
 }
 
-/* Publishes BATTERY_SAMPLE on the module's own channel and schedules the next one. */
-static void sample_work_handler(struct k_work *work)
+static void sample_schedule(void)
 {
-	ARG_UNUSED(work);
-
-	struct battery_msg msg = { .type = BATTERY_SAMPLE };
 	int err;
-
-	err = zbus_chan_pub(&battery_chan, &msg, PUB_TIMEOUT);
-	if (err) {
-		LOG_ERR("zbus_chan_pub battery_chan, error: %d", err);
-		FATAL_ERROR();
-		return;
-	}
 
 	err = k_work_reschedule(&sample_work,
 				K_SECONDS(CONFIG_APP_BATTERY_SAMPLE_INTERVAL_SECONDS));
 	if (err < 0) {
 		LOG_ERR("k_work_reschedule sample_work, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+
+/* Moves the sampling tick from the system workqueue to the battery thread. */
+static void sample_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	struct priv_battery_msg msg = { .type = BATTERY_PRIV_SAMPLE };
+	int err;
+
+	err = zbus_chan_pub(&battery_priv_chan, &msg, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub battery_priv_chan, error: %d", err);
 		FATAL_ERROR();
 	}
 }
@@ -278,12 +290,7 @@ static void battery_thread(void)
 	ref_time = k_uptime_get();
 
 	/* fuel_gauge_setup() took the first sample, so the next one is due after an interval. */
-	err = k_work_reschedule(&sample_work,
-				K_SECONDS(CONFIG_APP_BATTERY_SAMPLE_INTERVAL_SECONDS));
-	if (err < 0) {
-		LOG_ERR("k_work_reschedule sample_work, error: %d", err);
-		FATAL_ERROR();
-	}
+	sample_schedule();
 
 	task_wdt_id = task_wdt_add(wdt_timeout_ms, battery_wdt_callback,
 				   (void *)k_current_get());
@@ -310,7 +317,17 @@ static void battery_thread(void)
 			return;
 		}
 
-		battery_sample(charger, &ref_time, &prev_chg_status);
+		if (chan == &battery_priv_chan) {
+			const struct priv_battery_msg *msg =
+				(const struct priv_battery_msg *)msg_buf;
+
+			if (msg->type == BATTERY_PRIV_SAMPLE) {
+				battery_sample(charger, &ref_time, &prev_chg_status);
+				sample_schedule();
+			}
+		} else {
+			LOG_WRN("Unhandled message in battery thread");
+		}
 	}
 }
 
