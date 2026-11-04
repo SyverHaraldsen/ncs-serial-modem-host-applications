@@ -1,0 +1,63 @@
+@startuml
+' SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+' Main module state machine in applications/93m1_at/src/main.c.
+' Notation: ../architecture.md#diagram-notation
+!include style.puml
+
+state STATE_RUNNING #FFFFFF {
+    state STATE_NETWORK_DISCONNECTED
+    STATE_NETWORK_DISCONNECTED : entry / publish LED_RGB_SET (red blink)
+    STATE_NETWORK_DISCONNECTED : BUTTON_1 / ;  <i>CONFIG_APP_BUTTONS</i>
+
+    state STATE_NETWORK_CONNECTED #FFFFFF {
+        state STATE_SYNC_IDLE
+        STATE_SYNC_IDLE : entry / publish LED_RGB_SET (yellow pulse)
+        STATE_SYNC_IDLE : BUTTON_1 / sync_schedule(K_NO_WAIT)  <i>CONFIG_APP_BUTTONS</i>
+
+        state STATE_SYNCING #FFFFFF {
+            state STATE_SYNC_LOCATION #FFFFFF;line:94A3B8;line.dashed
+            STATE_SYNC_LOCATION : <i>CONFIG_APP_LOCATION</i>
+            STATE_SYNC_LOCATION : entry / publish LOCATION_FIX_REQUEST
+
+            state STATE_SYNC_BATTERY #FFFFFF;line:94A3B8;line.dashed
+            STATE_SYNC_BATTERY : <i>CONFIG_APP_BATTERY</i>
+            STATE_SYNC_BATTERY : entry / battery_percent_get()
+            STATE_SYNC_BATTERY : entry / publish CLOUD_BATTERY_SAMPLE
+
+            [*] -[#94A3B8,dashed]-> STATE_SYNC_LOCATION
+            [*] -[#94A3B8,dashed]-> STATE_SYNC_BATTERY : [no location]
+
+            STATE_SYNC_LOCATION -[#94A3B8,dashed]-> STATE_SYNC_BATTERY : LOCATION_FIX_DONE
+        }
+        STATE_SYNCING : entry / publish LED_RGB_SET (green blink)
+        STATE_SYNCING : MAIN_PRIV_SYNC / ;
+        STATE_SYNCING : BUTTON_1 / ;  <i>CONFIG_APP_BUTTONS</i>
+
+        [*] --> STATE_SYNC_IDLE
+
+        STATE_SYNC_IDLE -down-> STATE_SYNCING : MAIN_PRIV_SYNC
+        STATE_SYNC_LOCATION -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : LOCATION_FIX_DONE\n[no battery]
+        STATE_SYNC_BATTERY -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : CLOUD_BATTERY_DONE
+        STATE_SYNC_BATTERY -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : [no valid sample]
+    }
+    STATE_NETWORK_CONNECTED : entry / sync_schedule(CONFIG_APP_SYNC_BOOT_DELAY_SECONDS)
+    STATE_NETWORK_CONNECTED : exit / sync_cancel()
+
+    [*] --> STATE_NETWORK_DISCONNECTED
+
+    STATE_NETWORK_DISCONNECTED -down-> STATE_NETWORK_CONNECTED : NETWORK_CONNECTED
+    STATE_NETWORK_CONNECTED -up-> STATE_NETWORK_DISCONNECTED : \nNETWORK_DISCONNECTED
+}
+STATE_RUNNING : BUTTON_2 / ;  <i>CONFIG_APP_BUTTONS</i>
+STATE_RUNNING : any other message / ;
+
+[*] --> STATE_RUNNING
+
+legend bottom
+  The sync work item publishes MAIN_PRIV_SYNC and reschedules itself every CONFIG_APP_SYNC_INTERVAL
+  seconds, so a trigger that arrives in STATE_SYNCING is dropped without stopping the timer.
+  Fuel gauge sampling is not part of these states. The Battery module samples on its own timer,
+  and STATE_SYNC_BATTERY only reads the latest value with battery_percent_get().
+end legend
+
+@enduml
