@@ -28,6 +28,10 @@
 &modem {
 	status = "okay";
 	zephyr,pm-device-runtime-auto;
+	/* A host reset leaves the modem powered and in CMUX mode, so the init script gets no
+	 * reply and only the recovery reset brings it back, 15 s later. Reset it on every start.
+	 */
+	zephyr,mdm-reset-behavior = "toggle_on_resume", "toggle_on_recovery";
 };
 
 &psa_rng {
