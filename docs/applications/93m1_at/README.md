@@ -20,7 +20,7 @@ location fixes to nRF Cloud over that AT interface.
 
 ## Modules
 
-The application follows the shared [Architecture](../../architecture.md). It consists of the Main, Network, Cloud, Location, Battery, Buttons, and Modem AT modules. See [Modules per application](../../architecture.md#modules-per-application) for what each one does in this application.
+The application follows the shared [Architecture](../../architecture.md). It consists of the Main, Network, Cloud, Location, Battery, Buttons, LED, and Modem AT modules. See [Modules per application](../../architecture.md#modules-per-application) for what each one does in this application.
 
 ## Cloud synchronization
 
@@ -30,6 +30,20 @@ Once the modem has attached to the network it performs a cloud sync every 10 min
 - **Battery:** sends the fuel gauge state of charge as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The fuel gauge is sampled every 60 seconds whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`).
 
 The modem is its own nRF Cloud client, so the device ID in nRF Cloud is the modem UUID from `AT%DEVICEUUID`. See [Verify](../../getting-started/93m1-at.md#step-6-verify) for where the data shows up in nRF Cloud.
+
+## LED indication
+
+The Main module sets the host RGB LED on the nRF54L15 side from its state:
+
+| State | LED |
+| --- | --- |
+| Network down | Red, 250 ms blink every 5 s |
+| Synchronization running | Green, 250 ms blink |
+| Idle between synchronizations | Yellow, 50 ms pulse every 15 s |
+
+A synchronization is running from when Main requests the location fix and the battery report until both modules have finished, whether they succeeded or not. A **Button 1** press or a sync interval that fires in that time is skipped.
+
+The LED module is enabled when the board devicetree defines the `led-red`, `led-green`, and `led-blue` aliases (`CONFIG_APP_LED`).
 
 ## Shell commands
 

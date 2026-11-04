@@ -19,6 +19,8 @@ ZBUS_CHAN_DECLARE(cloud_chan);
 enum cloud_msg_type {
 	/* Battery state-of-charge percentage, value in .battery_percent. */
 	CLOUD_BATTERY_SAMPLE = 0x1,
+	/* Output: the battery report has finished, whether or not it succeeded. */
+	CLOUD_BATTERY_DONE,
 };
 
 struct cloud_msg {

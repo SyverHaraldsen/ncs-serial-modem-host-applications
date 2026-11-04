@@ -132,6 +132,14 @@ static void cloud_thread(void)
 					FATAL_ERROR();
 				} else {
 				}
+
+				struct cloud_msg msg_done = { .type = CLOUD_BATTERY_DONE };
+
+				err = zbus_chan_pub(&cloud_chan, &msg_done, PUB_TIMEOUT);
+				if (err) {
+					LOG_ERR("zbus_chan_pub cloud_chan, error: %d", err);
+					FATAL_ERROR();
+				}
 			}
 		} else {
 			LOG_WRN("Unhandled message in cloud thread");

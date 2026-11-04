@@ -22,6 +22,9 @@
 #if defined(CONFIG_APP_BUTTONS)
 #include "modules/buttons/buttons.h"
 #endif
+#if defined(CONFIG_APP_LED)
+#include "modules/led/led.h"
+#endif
 
 LOG_MODULE_REGISTER(main, CONFIG_APP_MAIN_LOG_LEVEL);
 
@@ -43,6 +46,8 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(main_subscriber);
 #define CHANNEL_LIST(X) \
 	X(main_chan, struct main_msg) \
 	X(network_chan, struct network_msg) \
+	IF_ENABLED(CONFIG_APP_LOCATION, (X(location_chan, struct location_msg))) \
+	IF_ENABLED(CONFIG_APP_BATTERY, (X(cloud_chan, struct cloud_msg))) \
 	IF_ENABLED(CONFIG_APP_BUTTONS, (X(button_chan, struct button_msg)))
 
 #define MAX_MSG_SIZE MAX_MSG_SIZE_FROM_LIST(CHANNEL_LIST)
@@ -50,15 +55,51 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(main_subscriber);
 #define ADD_OBSERVER(_chan, _type) ZBUS_CHAN_ADD_OBS(_chan, main_subscriber, 0);
 CHANNEL_LIST(ADD_OBSERVER)
 
+#if defined(CONFIG_APP_LED)
+/** Slow red blink while the network is down. */
+static const struct led_msg led_pattern_disconnected = {
+	.type = LED_RGB_SET,
+	.red = 255,
+	.duration_on_msec = 250,
+	.duration_off_msec = 5000,
+	.repetitions = -1,
+};
+
+/** Fast green blink while a synchronization is running. */
+static const struct led_msg led_pattern_sync = {
+	.type = LED_RGB_SET,
+	.green = 255,
+	.duration_on_msec = 250,
+	.duration_off_msec = 250,
+	.repetitions = -1,
+};
+
+/** Short yellow pulse every 15 seconds between synchronizations, to show the device is alive. */
+static const struct led_msg led_pattern_idle = {
+	.type = LED_RGB_SET,
+	.red = 255,
+	.green = 255,
+	.duration_on_msec = 50,
+	.duration_off_msec = 15000,
+	.repetitions = -1,
+};
+#endif
+
 enum app_state {
 	STATE_DISCONNECTED,
 	STATE_CONNECTED,
+		/** Waiting for the next synchronization trigger. */
+		STATE_SYNC_IDLE,
+		/** Waiting for the modules to finish the requested synchronization steps. */
+		STATE_SYNCING,
 };
 
 struct app_object {
 	struct smf_ctx ctx;
 	const struct zbus_channel *chan;
 	uint8_t msg_buf[MAX_MSG_SIZE];
+	/** Number of synchronization steps that have not reported completion yet. */
+	uint8_t sync_pending;
 };
 
 static void telemetry_timer_fn(struct k_work *work);
@@ -69,19 +110,27 @@ static void sample_timer_fn(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(sample_timer, sample_timer_fn);
 #endif
 
-static void report_telemetry(void);
+static uint8_t report_telemetry(void);
 static void disconnected_entry(void *obj);
 static enum smf_state_result disconnected_run(void *obj);
 static void connected_entry(void *obj);
 static enum smf_state_result connected_run(void *obj);
 static void connected_exit(void *obj);
+static void sync_idle_entry(void *obj);
+static enum smf_state_result sync_idle_run(void *obj);
+static void syncing_entry(void *obj);
+static enum smf_state_result syncing_run(void *obj);
 static void wdt_callback(int channel_id, void *user_data);
 
 static const struct smf_state states[] = {
 	[STATE_DISCONNECTED] = SMF_CREATE_STATE(disconnected_entry, disconnected_run,
 						NULL, NULL, NULL),
 	[STATE_CONNECTED] = SMF_CREATE_STATE(connected_entry, connected_run, connected_exit,
-					     NULL, NULL),
+					     NULL, &states[STATE_SYNC_IDLE]),
+	[STATE_SYNC_IDLE] = SMF_CREATE_STATE(sync_idle_entry, sync_idle_run, NULL,
+					     &states[STATE_CONNECTED], NULL),
+	[STATE_SYNCING] = SMF_CREATE_STATE(syncing_entry, syncing_run, NULL,
+					   &states[STATE_CONNECTED], NULL),
 };
 
 static void telemetry_timer_fn(struct k_work *work)
@@ -120,8 +169,21 @@ static void sample_timer_fn(struct k_work *work)
 }
 #endif
 
-static void report_telemetry(void)
+static void sync_timer_arm(k_timeout_t delay)
 {
+	int err;
+
+	err = k_work_reschedule(&telemetry_timer, delay);
+	if (err < 0) {
+		LOG_ERR("k_work_reschedule telemetry_timer, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+
+/* Returns the number of synchronization steps requested. Each one reports back when done. */
+static uint8_t report_telemetry(void)
+{
+	uint8_t requested = 0;
 	int err;
 
 	LOG_DBG("Reporting telemetry");
@@ -132,6 +194,8 @@ static void report_telemetry(void)
 	if (err) {
 		LOG_ERR("zbus_chan_pub location_chan, error: %d", err);
 		FATAL_ERROR();
+	} else {
+		requested++;
 	}
 #endif
 #if defined(CONFIG_APP_BATTERY)
@@ -145,15 +209,69 @@ static void report_telemetry(void)
 		if (err) {
 			LOG_ERR("zbus_chan_pub cloud_chan, error: %d", err);
 			FATAL_ERROR();
+		} else {
+			requested++;
 		}
 	}
 #endif
 
 	(void)err;
+
+	return requested;
 }
 
+static bool is_sync_module_chan(const struct zbus_channel *chan)
+{
+	ARG_UNUSED(chan);
+
+#if defined(CONFIG_APP_LOCATION)
+	if (chan == &location_chan) {
+		return true;
+	}
+#endif
+#if defined(CONFIG_APP_BATTERY)
+	if (chan == &cloud_chan) {
+		return true;
+	}
+#endif
+
+	return false;
+}
+
+static bool is_sync_step_done(const struct app_object *state)
+{
+	ARG_UNUSED(state);
+
+#if defined(CONFIG_APP_LOCATION)
+	if (state->chan == &location_chan) {
+		return ((const struct location_msg *)state->msg_buf)->type == LOCATION_FIX_DONE;
+	}
+#endif
+#if defined(CONFIG_APP_BATTERY)
+	if (state->chan == &cloud_chan) {
+		return ((const struct cloud_msg *)state->msg_buf)->type == CLOUD_BATTERY_DONE;
+	}
+#endif
+
+	return false;
+}
+
+#if defined(CONFIG_APP_LED)
+static void led_pattern_set(const struct led_msg *pattern)
+{
+	int err;
+
+	err = zbus_chan_pub(&led_chan, pattern, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub led_chan, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+#endif
+
 #if defined(CONFIG_APP_BUTTONS)
-static void handle_button(const struct button_msg *msg, bool connected)
+/* A non-NULL skip_reason tells why a sync cannot start right now. */
+static void handle_button(const struct button_msg *msg, const char *skip_reason)
 {
 	int err;
 
@@ -163,8 +281,8 @@ static void handle_button(const struct button_msg *msg, bool connected)
 		return;
 	}
 
-	if (!connected) {
-		LOG_INF("Button 1: network is down, sync skipped");
+	if (skip_reason) {
+		LOG_INF("Button 1: %s, sync skipped", skip_reason);
 
 		return;
 	}
@@ -184,6 +302,10 @@ static void disconnected_entry(void *obj)
 
 	LOG_INF("%s", __func__);
 	LOG_INF("Network disconnected");
+
+#if defined(CONFIG_APP_LED)
+	led_pattern_set(&led_pattern_disconnected);
+#endif
 }
 
 static enum smf_state_result disconnected_run(void *obj)
@@ -192,7 +314,7 @@ static enum smf_state_result disconnected_run(void *obj)
 
 #if defined(CONFIG_APP_BUTTONS)
 	if (state->chan == &button_chan) {
-		handle_button((const struct button_msg *)state->msg_buf, false);
+		handle_button((const struct button_msg *)state->msg_buf, "network is down");
 
 		return SMF_EVENT_HANDLED;
 	}
@@ -206,7 +328,7 @@ static enum smf_state_result disconnected_run(void *obj)
 		}
 	} else if (state->chan == &main_chan) {
 		LOG_WRN("Sync requested while the network is down, ignoring");
-	} else {
+	} else if (!is_sync_module_chan(state->chan)) {
 		LOG_WRN("Unhandled message in disconnected state.");
 	}
 
@@ -216,16 +338,11 @@ static enum smf_state_result disconnected_run(void *obj)
 static void connected_entry(void *obj)
 {
 	ARG_UNUSED(obj);
-	int err;
 
 	LOG_INF("%s", __func__);
 	LOG_INF("Network connected, first sync in %d s", CONFIG_APP_SYNC_BOOT_DELAY_SECONDS);
 
-	err = k_work_reschedule(&telemetry_timer, K_SECONDS(CONFIG_APP_SYNC_BOOT_DELAY_SECONDS));
-	if (err < 0) {
-		LOG_ERR("k_work_reschedule telemetry_timer, error: %d", err);
-		FATAL_ERROR();
-	}
+	sync_timer_arm(K_SECONDS(CONFIG_APP_SYNC_BOOT_DELAY_SECONDS));
 }
 
 static enum smf_state_result connected_run(void *obj)
@@ -238,27 +355,11 @@ static enum smf_state_result connected_run(void *obj)
 		if (msg->type == NETWORK_DISCONNECTED) {
 			smf_set_state(SMF_CTX(state), &states[STATE_DISCONNECTED]);
 		}
-	} else if (state->chan == &main_chan) {
-		const struct main_msg *msg = (const struct main_msg *)state->msg_buf;
-
-		if (msg->type == MAIN_SYNC) {
-			int err;
-
-			LOG_DBG("Sync tick, next in %d s", CONFIG_APP_SYNC_INTERVAL);
-
-			report_telemetry();
-			err = k_work_reschedule(&telemetry_timer,
-						K_SECONDS(CONFIG_APP_SYNC_INTERVAL));
-			if (err < 0) {
-				LOG_ERR("k_work_reschedule telemetry_timer, error: %d", err);
-				FATAL_ERROR();
-			}
-		}
 #if defined(CONFIG_APP_BUTTONS)
 	} else if (state->chan == &button_chan) {
-		handle_button((const struct button_msg *)state->msg_buf, true);
+		handle_button((const struct button_msg *)state->msg_buf, NULL);
 #endif
-	} else {
+	} else if (!is_sync_module_chan(state->chan)) {
 		LOG_WRN("Unhandled message in connected state.");
 	}
 
@@ -272,6 +373,80 @@ static void connected_exit(void *obj)
 	LOG_INF("%s", __func__);
 
 	(void)k_work_cancel_delayable(&telemetry_timer);
+}
+
+static void sync_idle_entry(void *obj)
+{
+	ARG_UNUSED(obj);
+
+#if defined(CONFIG_APP_LED)
+	led_pattern_set(&led_pattern_idle);
+#endif
+}
+
+static enum smf_state_result sync_idle_run(void *obj)
+{
+	struct app_object *state = obj;
+
+	if (state->chan == &main_chan) {
+		const struct main_msg *msg = (const struct main_msg *)state->msg_buf;
+
+		if (msg->type == MAIN_SYNC) {
+			LOG_DBG("Sync tick, next in %d s", CONFIG_APP_SYNC_INTERVAL);
+
+			state->sync_pending = report_telemetry();
+			sync_timer_arm(K_SECONDS(CONFIG_APP_SYNC_INTERVAL));
+
+			if (state->sync_pending > 0) {
+				smf_set_state(SMF_CTX(state), &states[STATE_SYNCING]);
+			}
+
+			return SMF_EVENT_HANDLED;
+		}
+	}
+
+	return SMF_EVENT_PROPAGATE;
+}
+
+static void syncing_entry(void *obj)
+{
+	ARG_UNUSED(obj);
+
+#if defined(CONFIG_APP_LED)
+	led_pattern_set(&led_pattern_sync);
+#endif
+}
+
+static enum smf_state_result syncing_run(void *obj)
+{
+	struct app_object *state = obj;
+
+	if (state->chan == &main_chan) {
+		LOG_WRN("Sync requested while a sync is running, ignoring");
+		sync_timer_arm(K_SECONDS(CONFIG_APP_SYNC_INTERVAL));
+
+		return SMF_EVENT_HANDLED;
+	}
+
+#if defined(CONFIG_APP_BUTTONS)
+	if (state->chan == &button_chan) {
+		handle_button((const struct button_msg *)state->msg_buf, "sync is running");
+
+		return SMF_EVENT_HANDLED;
+	}
+#endif
+
+	if (is_sync_step_done(state)) {
+		state->sync_pending--;
+
+		if (state->sync_pending == 0) {
+			smf_set_state(SMF_CTX(state), &states[STATE_SYNC_IDLE]);
+		}
+
+		return SMF_EVENT_HANDLED;
+	}
+
+	return SMF_EVENT_PROPAGATE;
 }
 
 static void wdt_callback(int channel_id, void *user_data)

@@ -1,0 +1,24 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_LED
+	bool "LED module"
+	depends on $(dt_alias_enabled,led-red)
+	depends on $(dt_alias_enabled,led-green)
+	depends on $(dt_alias_enabled,led-blue)
+	select GPIO
+	default y
+	help
+	  Drives the host RGB LED from patterns published on led_chan.
+	  Requires the led-red, led-green and led-blue devicetree aliases.
+
+if APP_LED
+
+module = APP_LED
+module-str = LED
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # APP_LED

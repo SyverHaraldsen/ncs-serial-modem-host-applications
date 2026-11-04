@@ -14,7 +14,10 @@ extern "C" {
 #endif
 
 enum location_msg_type {
+	/* Input: request a location fix. */
 	LOCATION_FIX_REQUEST,
+	/* Output: the location request has finished, whether or not it succeeded. */
+	LOCATION_FIX_DONE,
 };
 
 struct location_msg {

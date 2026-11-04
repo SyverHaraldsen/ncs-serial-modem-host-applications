@@ -172,6 +172,14 @@ static void location_thread(void)
 					FATAL_ERROR();
 				} else {
 				}
+
+				struct location_msg msg_done = { .type = LOCATION_FIX_DONE };
+
+				err = zbus_chan_pub(&location_chan, &msg_done, PUB_TIMEOUT);
+				if (err) {
+					LOG_ERR("zbus_chan_pub location_chan, error: %d", err);
+					FATAL_ERROR();
+				}
 			}
 		} else {
 			LOG_WRN("Unhandled message in location thread");

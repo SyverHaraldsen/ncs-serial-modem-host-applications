@@ -29,3 +29,4 @@ target_sources_ifdef(CONFIG_APP_LOCATION app PRIVATE src/modules/location/locati
 target_sources_ifdef(CONFIG_APP_BATTERY app PRIVATE src/modules/battery/battery.c)
 target_sources_ifdef(CONFIG_APP_BUTTONS app PRIVATE src/modules/buttons/buttons.c)
 target_sources_ifdef(CONFIG_APP_BUTTONS_SHELL app PRIVATE src/modules/buttons/buttons_shell.c)
+target_sources_ifdef(CONFIG_APP_LED app PRIVATE src/modules/led/led.c)
