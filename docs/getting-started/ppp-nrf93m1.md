@@ -124,7 +124,12 @@ When the cloud connects, the application runs its first **cloud synchronization*
     <dbg> cloud.cloud_location_request_handle: Location: 63.421552, 10.437707 Uncertainty: 16m Type: WIFI
     ```
 
-1. Log in to [nRF Cloud](https://nrfcloud.nordicsemi.com/) and find the device under its Device ID. Heartbeats and metrics appear in the linked nRF Cloud project.
+1. Log in to [nRF Cloud](https://nrfcloud.nordicsemi.com/) and go to **Fleet** > **Devices**. Click the device with your Device ID to open its page.
+1. On the **Overview** tab, check the following:
+    - **Location**: the map shows the latest location fix.
+    - **Last message**: the most recent device message, with `"data":"hello"` from the synchronization. Select **Inspect recent data** to see earlier messages.
+
+Heartbeats and metrics appear in the linked nRF Cloud project.
 
 ## Next steps
 

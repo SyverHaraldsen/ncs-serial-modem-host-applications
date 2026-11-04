@@ -214,7 +214,10 @@ Run the following commands from a normal terminal, not the toolchain shell. Keep
 When the cloud connects, the application runs its first **cloud synchronization**. It sends a device message (`{"appId":"SMHA","messageType":"DATA","data":"hello"}`), polls the device shadow, checks for firmware updates, and uploads pending remote debugging data. With the Wi-Fi location build, it also scans for Wi-Fi access points and logs the resolved position. The synchronization repeats every 10 minutes while the cloud stays connected (`CONFIG_APP_MAIN_SYNC_INTERVAL_SECONDS`).
 
 1. Wait for the first synchronization to complete in the host console, or press **Button 1** (**BUTTON0** on the DK) to start one right away. With no errors after `Cloud connected`, the device is sending data.
-1. Log in to [nRF Cloud](https://nrfcloud.nordicsemi.com/) and find the device under its Device ID in the device list.
+1. Log in to [nRF Cloud](https://nrfcloud.nordicsemi.com/) and go to **Fleet** > **Devices**. Click the device with your Device ID to open its page.
+1. On the **Overview** tab, check the following:
+    - **Last message**: the most recent device message, with `"data":"hello"` from the synchronization. Select **Inspect recent data** to see earlier messages.
+    - **Location**: the map shows the latest location fix. This only applies to the Wi-Fi location build.
 
 ## Next steps
 
