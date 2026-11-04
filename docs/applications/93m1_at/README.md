@@ -43,6 +43,8 @@ The Main module sets the host RGB LED on the nRF54L15 side from its state:
 
 A synchronization is running from when Main requests the location fix and the battery report until both modules have finished, whether they succeeded or not. A **Button 1** press or a sync interval that fires in that time is skipped.
 
+The modem's own module LEDs are turned off each time the network connects (`AT%MODULECFG="ledMode",0`), so only the host LED is lit.
+
 The LED module is enabled when the board devicetree defines the `led-red`, `led-green`, and `led-blue` aliases (`CONFIG_APP_LED`).
 
 ## Shell commands
