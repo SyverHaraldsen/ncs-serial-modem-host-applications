@@ -24,10 +24,33 @@ The application follows the shared [Architecture](../../architecture.md). It con
 
 ## Cloud synchronization
 
-Once the modem has attached to the network it performs a cloud sync every 10 minutes (`CONFIG_APP_SYNC_BOOT_DELAY_SECONDS` and `CONFIG_APP_SYNC_INTERVAL`). Each sync does two things through the modem's nRF Cloud client:
+Once the modem has attached to the network it performs a cloud sync 5 seconds after connect and then every 10 minutes (`CONFIG_APP_SYNC_BOOT_DELAY_SECONDS` and `CONFIG_APP_SYNC_INTERVAL`). Each sync runs two steps in order through the modem's nRF Cloud client, and the Main module waits for each step to finish, whether it succeeded or not, before starting the next:
 
 - **Location:** sends `AT%NRFCLOUDLOCATION=7,1`. The modem collects single-cell, multicell and Wi-Fi measurements, nRF Cloud resolves them to a position, and the result is returned to the host. Change the method with `CONFIG_APP_LOCATION_METHOD` (1 single-cell, 2 multicell, 4 Wi-Fi, or a sum of them).
-- **Battery:** sends the fuel gauge state of charge as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The fuel gauge is sampled every 60 seconds whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`).
+- **Battery:** sends the fuel gauge state of charge as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The fuel gauge is sampled every 60 seconds whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`). If it has no valid sample yet, the step is skipped.
+
+The Main module tracks this with a hierarchical state machine. Each sync step is its own state, entered by publishing the request to the module and left when the module publishes that it is done:
+
+```mermaid
+stateDiagram-v2
+    direction LR
+    state STATE_RUNNING {
+        [*] --> STATE_NETWORK_DISCONNECTED
+        STATE_NETWORK_DISCONNECTED --> STATE_NETWORK_CONNECTED : NETWORK_CONNECTED
+        STATE_NETWORK_CONNECTED --> STATE_NETWORK_DISCONNECTED : NETWORK_DISCONNECTED
+        state STATE_NETWORK_CONNECTED {
+            [*] --> STATE_SYNC_IDLE
+            STATE_SYNC_IDLE --> STATE_SYNCING : sync timer or Button 1
+            state STATE_SYNCING {
+                [*] --> STATE_SYNC_LOCATION
+                STATE_SYNC_LOCATION --> STATE_SYNC_BATTERY : LOCATION_FIX_DONE
+            }
+            STATE_SYNC_BATTERY --> STATE_SYNC_IDLE : CLOUD_BATTERY_DONE
+        }
+    }
+```
+
+A step whose module is not built (`CONFIG_APP_LOCATION` or `CONFIG_APP_BATTERY`) is left out of the sequence. A network disconnect ends a running sync and cancels the sync timer.
 
 The modem is its own nRF Cloud client, so the device ID in nRF Cloud is the modem UUID from `AT%DEVICEUUID`. See [Verify](../../getting-started/93m1-at.md#step-6-verify) for where the data shows up in nRF Cloud.
 
@@ -41,7 +64,7 @@ The Main module sets the host RGB LED on the nRF54L15 side from its state:
 | Synchronization running | Green, 250 ms blink |
 | Idle between synchronizations | Yellow, 50 ms pulse every 15 s |
 
-A synchronization is running from when Main requests the location fix and the battery report until both modules have finished, whether they succeeded or not. A **Button 1** press or a sync interval that fires in that time is skipped.
+A synchronization is running from when Main requests the location fix until the battery report has finished. A **Button 1** press or a sync interval that fires in that time is skipped.
 
 The modem's own module LEDs are turned off each time the network connects (`AT%MODULECFG="ledMode",0`), so only the host LED is lit.
 
