@@ -45,6 +45,9 @@ ZBUS_MSG_SUBSCRIBER_DEFINE(battery);
 
 CHANNEL_LIST(ADD_OBSERVERS)
 
+static void sample_work_handler(struct k_work *work);
+static K_WORK_DELAYABLE_DEFINE(sample_work, sample_work_handler);
+
 static int read_sensors(const struct device *charger, float *voltage, float *current,
 			float *temp, int32_t *chg_status, bool *vbus);
 static void update_charge_state(int32_t chg_status, int32_t *prev);
@@ -216,6 +219,29 @@ static void battery_sample(const struct device *charger, int64_t *ref_time,
 		vbus ? "VBUS" : "battery");
 }
 
+/* Publishes BATTERY_SAMPLE on the module's own channel and schedules the next one. */
+static void sample_work_handler(struct k_work *work)
+{
+	ARG_UNUSED(work);
+
+	struct battery_msg msg = { .type = BATTERY_SAMPLE };
+	int err;
+
+	err = zbus_chan_pub(&battery_chan, &msg, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub battery_chan, error: %d", err);
+		FATAL_ERROR();
+		return;
+	}
+
+	err = k_work_reschedule(&sample_work,
+				K_SECONDS(CONFIG_APP_BATTERY_SAMPLE_INTERVAL_SECONDS));
+	if (err < 0) {
+		LOG_ERR("k_work_reschedule sample_work, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+
 static void battery_wdt_callback(int channel_id, void *user_data)
 {
 	LOG_ERR("Battery watchdog expired, channel: %d, thread: %s",
@@ -250,6 +276,14 @@ static void battery_thread(void)
 		FATAL_ERROR();
 	}
 	ref_time = k_uptime_get();
+
+	/* fuel_gauge_setup() took the first sample, so the next one is due after an interval. */
+	err = k_work_reschedule(&sample_work,
+				K_SECONDS(CONFIG_APP_BATTERY_SAMPLE_INTERVAL_SECONDS));
+	if (err < 0) {
+		LOG_ERR("k_work_reschedule sample_work, error: %d", err);
+		FATAL_ERROR();
+	}
 
 	task_wdt_id = task_wdt_add(wdt_timeout_ms, battery_wdt_callback,
 				   (void *)k_current_get());

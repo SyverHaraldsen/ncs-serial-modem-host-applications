@@ -161,11 +161,6 @@ static const struct smf_state states[];
 static void sync_work_handler(struct k_work *work);
 static K_WORK_DELAYABLE_DEFINE(sync_work, sync_work_handler);
 
-#if defined(CONFIG_APP_BATTERY)
-static void battery_sample_handler(struct k_work *work);
-static K_WORK_DELAYABLE_DEFINE(battery_sample_work, battery_sample_handler);
-#endif /* CONFIG_APP_BATTERY */
-
 /** Forward declarations */
 
 static void state_running_entry(void *obj);
@@ -281,29 +276,6 @@ static void sync_work_handler(struct k_work *work)
 
 	sync_schedule(K_SECONDS(CONFIG_APP_SYNC_INTERVAL));
 }
-
-#if defined(CONFIG_APP_BATTERY)
-static void battery_sample_handler(struct k_work *work)
-{
-	ARG_UNUSED(work);
-
-	struct battery_msg msg = { .type = BATTERY_SAMPLE };
-	int err;
-
-	err = zbus_chan_pub(&battery_chan, &msg, PUB_TIMEOUT);
-	if (err) {
-		LOG_ERR("zbus_chan_pub battery_chan, error: %d", err);
-		FATAL_ERROR();
-	}
-
-	err = k_work_reschedule(&battery_sample_work,
-				K_SECONDS(CONFIG_APP_BATTERY_SAMPLE_INTERVAL));
-	if (err < 0) {
-		LOG_ERR("k_work_reschedule battery_sample_work, error: %d", err);
-		FATAL_ERROR();
-	}
-}
-#endif /* CONFIG_APP_BATTERY */
 
 #if defined(CONFIG_APP_LOCATION)
 static void location_fix_request(void)
@@ -638,15 +610,6 @@ int main(void)
 		FATAL_ERROR();
 		return -EFAULT;
 	}
-
-#if defined(CONFIG_APP_BATTERY)
-	err = k_work_reschedule(&battery_sample_work, K_NO_WAIT);
-	if (err < 0) {
-		LOG_ERR("k_work_reschedule battery_sample_work, error: %d", err);
-		FATAL_ERROR();
-		return -EFAULT;
-	}
-#endif /* CONFIG_APP_BATTERY */
 
 	smf_set_initial(SMF_CTX(&main_state), &states[STATE_RUNNING]);
 
