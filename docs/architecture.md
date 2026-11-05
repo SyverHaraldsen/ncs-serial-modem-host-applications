@@ -56,6 +56,7 @@ The applications share the pattern but not the code. Each application has its ow
 | Buttons | No thread. Publishes DK button presses | No thread. Publishes DK button presses | Not included |
 | LED | No thread. Listener that drives the host RGB LED, only on the nRF93M1 DK | No thread. Listener that drives the host RGB LED | Not included |
 | Modem AT | No channel. Serializes access to the modem AT pipe | No channel. Serializes access to the modem AT pipe | No channel. Owns the Serial Modem UART, serializes AT commands, and routes URCs |
+| Modem Power | No channel. Applies PSM and modem specific power saving each time the network connects | No channel. Applies PSM and nRF93M1 module power saving each time the network connects | Not included |
 
 A **state machine** module runs its messages through an SMF state machine, as described in this document. A **message loop** module has its own thread, channel, and watchdog like the others, but handles each message in a plain `switch` statement because it has no state worth modeling. The Buttons module publishes from the button callback and needs no thread. The Modem AT module is a helper that other modules and the shell call directly.
 

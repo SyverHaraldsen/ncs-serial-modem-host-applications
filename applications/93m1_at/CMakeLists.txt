@@ -22,6 +22,7 @@ target_sources(app PRIVATE
 	src/modules/modem_at/modem_at.c
 )
 
+target_sources_ifdef(CONFIG_APP_MODEM_POWER app PRIVATE src/modules/modem_power/modem_power.c)
 target_sources_ifdef(CONFIG_SHELL app PRIVATE src/modules/network/network_shell.c)
 target_sources_ifdef(CONFIG_APP_CLOUD app PRIVATE src/modules/cloud/cloud.c)
 target_sources_ifdef(CONFIG_APP_MODEM_AT_SHELL app PRIVATE src/modules/modem_at/modem_at_shell.c)

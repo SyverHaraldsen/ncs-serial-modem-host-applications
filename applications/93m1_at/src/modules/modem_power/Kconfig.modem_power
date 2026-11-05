@@ -1,0 +1,40 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_MODEM_POWER
+	bool "Modem power saving"
+	default y
+	depends on APP_MODEM_AT
+	help
+	  Apply the modem power saving settings over the AT pipe each time the network
+	  connects: PSM, and the module LEDs, trace output, USB and SIM presence detection
+	  disabled.
+
+if APP_MODEM_POWER
+
+config APP_MODEM_POWER_PSM_TAU
+	string "Requested periodic TAU (T3412 extended)"
+	default "00101100"
+	help
+	  Bit string for AT+CPSMS. The default requests 12 hours. The network decides
+	  the granted value.
+
+config APP_MODEM_POWER_PSM_ACTIVE_TIME
+	string "Requested active time (T3324)"
+	default "00000010"
+	help
+	  Bit string for AT+CPSMS. The default requests 4 seconds. The network decides
+	  the granted value.
+
+config APP_MODEM_POWER_CMD_TIMEOUT_SECONDS
+	int "AT command timeout"
+	default 5
+
+module = APP_MODEM_POWER
+module-str = Modem power
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # APP_MODEM_POWER

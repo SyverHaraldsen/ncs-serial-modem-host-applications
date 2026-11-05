@@ -20,7 +20,7 @@ location fixes to nRF Cloud over that AT interface.
 
 ## Modules
 
-The application follows the shared [Architecture](../../architecture.md). It consists of the Main, Network, Cloud, Location, Battery, Buttons, LED, and Modem AT modules. See [Modules per application](../../architecture.md#modules-per-application) for what each one does in this application.
+The application follows the shared [Architecture](../../architecture.md). It consists of the Main, Network, Cloud, Location, Battery, Buttons, LED, Modem AT, and Modem Power modules. See [Modules per application](../../architecture.md#modules-per-application) for what each one does in this application.
 
 ## Cloud synchronization
 
@@ -54,7 +54,14 @@ The Main module sets the host RGB LED on the nRF54L15 side from its state:
 
 A synchronization is running from when Main requests the location fix until the observability upload has finished. A **Button 1** press or a sync interval that fires in that time is skipped.
 
-The modem's own module LEDs are turned off each time the network connects (`AT%MODULECFG="ledMode",0`), so only the host LED is lit.
+Each time the network connects, the Modem Power module applies the modem power saving settings (`CONFIG_APP_MODEM_POWER`):
+
+- The driver's periodic poll is paused, as it would wake the CMUX link every 30 seconds.
+- PSM is requested with `AT+CPSMS`. The defaults ask for a 12 hour TAU and a 4 second active time (`CONFIG_APP_MODEM_POWER_PSM_TAU`, `CONFIG_APP_MODEM_POWER_PSM_ACTIVE_TIME`), and the network decides the granted values.
+- The modem's module LEDs are turned off (`ledMode`), so only the host LED is lit.
+- Trace output is turned off (`logCtrl`), USB is turned off (`usbCtrl`, `usbSlpMask`), and the SIM is powered down when idle with presence detection off (`SimPowerSave`, `SimPresenceDetect`).
+
+`autoPowerSave` is left off. The modem would then sleep without the host knowing, and a host reset leaves it unreachable.
 
 The LED module is enabled when the board devicetree defines the `led-red`, `led-green`, and `led-blue` aliases (`CONFIG_APP_LED`).
 

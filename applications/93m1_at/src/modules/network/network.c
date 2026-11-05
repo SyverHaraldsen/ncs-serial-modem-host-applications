@@ -15,6 +15,7 @@
 
 #include "app_common.h"
 #include "modules/modem_at/modem_at.h"
+#include "modules/modem_power/modem_power.h"
 #include "network.h"
 
 LOG_MODULE_REGISTER(network, CONFIG_APP_NETWORK_LOG_LEVEL);
@@ -54,8 +55,6 @@ static enum smf_state_result disconnected_run(void *obj);
 static void connected_entry(void *obj);
 static enum smf_state_result connected_run(void *obj);
 static void network_wdt_callback(int channel_id, void *user_data);
-static int configure_psm(void);
-static int disable_module_leds(void);
 static void log_device_uuid(void);
 
 static const struct smf_state states[] = {
@@ -153,22 +152,14 @@ static enum smf_state_result disconnected_run(void *obj)
 
 static void connected_entry(void *obj)
 {
-	int err;
-
 	ARG_UNUSED(obj);
 
 	LOG_DBG("%s", __func__);
 	LOG_DBG("Network module connected");
 
-	err = configure_psm();
-	if (err) {
-		LOG_ERR("configure_psm, error: %d", err);
-	}
-
-	err = disable_module_leds();
-	if (err) {
-		LOG_ERR("disable_module_leds, error: %d", err);
-	}
+#if IS_ENABLED(CONFIG_APP_MODEM_POWER)
+	modem_power_saving_configure();
+#endif
 
 	log_device_uuid();
 }
@@ -206,19 +197,6 @@ static void network_wdt_callback(int channel_id, void *user_data)
 		channel_id, k_thread_name_get((k_tid_t)user_data));
 
 	FATAL_ERROR_WATCHDOG_TIMEOUT();
-}
-
-static int configure_psm(void)
-{
-	return modem_at_run("AT+CPSMS=1,,,\"00100001\",\"00001010\"", NULL, 0, 10);
-}
-
-/* Only the host controlled LED is used. Applied on every connect, as the modem does not retain
- * all settings across a reset.
- */
-static int disable_module_leds(void)
-{
-	return modem_at_run("AT%MODULECFG=\"ledMode\",0", NULL, 0, 10);
 }
 
 static void log_device_uuid(void)
