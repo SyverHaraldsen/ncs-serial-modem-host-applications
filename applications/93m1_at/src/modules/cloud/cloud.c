@@ -122,8 +122,8 @@ static int cloud_send_observability(void)
 static void cloud_request_result(const char *what, int err)
 {
 	if (err == -EACCES) {
-		LOG_WRN("Failed to send %s, unauthorized (device may not be onboarded to nRF Cloud)",
-			what);
+		LOG_WRN("Failed to send %s, unauthorized "
+			"(device may not be onboarded to nRF Cloud)", what);
 	} else if (err == -ENETUNREACH) {
 		LOG_WRN("Failed to send %s, request rejected", what);
 	} else if (err) {
