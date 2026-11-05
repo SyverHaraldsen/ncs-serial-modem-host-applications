@@ -10,8 +10,8 @@ config APP_SYNC_INTERVAL
 	int "Sync interval (seconds)"
 	default 600
 	help
-	  Period between cloud syncs. One timer in the main state machine drives both
-	  the location fix and the battery report each cycle.
+	  Period between cloud syncs. One timer in the main state machine drives the
+	  location fix, the battery report and the observability upload each cycle.
 
 config APP_SYNC_BOOT_DELAY_SECONDS
 	int "Delay before the first sync after connect (seconds)"

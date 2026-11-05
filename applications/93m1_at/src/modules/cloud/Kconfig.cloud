@@ -28,17 +28,44 @@ config APP_CLOUD_AT_TIMEOUT_SECONDS
 	int "Cloud AT command timeout (seconds)"
 	default 30
 
+config APP_CLOUD_OBSERVABILITY
+	bool "Upload observability data"
+	default y
+	help
+	  Handles the upload request from the sync state machine by running
+	  AT%NRFCLOUDOBSUPLOAD, which sends the observability chunks queued on the modem to
+	  nRF Cloud. nRF Cloud lists the device as seen, with its hardware and software
+	  versions, only after observability data has arrived.
+
+config APP_CLOUD_OBSERVABILITY_HEARTBEAT
+	bool "Trigger a heartbeat before each upload"
+	default y
+	depends on APP_CLOUD_OBSERVABILITY
+	help
+	  Runs AT%NRFCLOUDOBSHEARTBEAT before each upload so that every sync carries a
+	  metrics heartbeat. The modem documentation marks the command for debug use. Turn
+	  this off to upload only what the modem has queued on its own.
+
+config APP_CLOUD_OBSERVABILITY_RESPONSE_SIZE
+	int "Observability upload response buffer size"
+	default 64
+	depends on APP_CLOUD_OBSERVABILITY
+	help
+	  Holds the %NRFCLOUDOBSUPLOAD result line that is logged after an upload.
+
 config APP_CLOUD_WATCHDOG_TIMEOUT_SECONDS
 	int "Watchdog timeout"
+	default 220 if APP_CLOUD_OBSERVABILITY_HEARTBEAT
 	default 120
 
 config APP_CLOUD_MSG_PROCESSING_TIMEOUT_SECONDS
 	int "Maximum message processing time"
+	default 190 if APP_CLOUD_OBSERVABILITY_HEARTBEAT
 	default 100
 	help
-	  modem_at_run() shares one AT pipe with other modules. This value must
-	  exceed CONFIG_APP_MODEM_AT_PIPE_WAIT_TIMEOUT_SECONDS plus
-	  CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS to cover that combined worst case.
+	  modem_at_run() shares one AT pipe with other modules. This value must exceed
+	  CONFIG_APP_MODEM_AT_PIPE_WAIT_TIMEOUT_SECONDS plus CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS
+	  for every AT command a message runs, which is two for an upload with a heartbeat.
 
 module = APP_CLOUD
 module-str = cloud

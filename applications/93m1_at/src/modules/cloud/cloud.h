@@ -17,8 +17,9 @@ extern "C" {
 /**
  * @brief Cloud module channel.
  *
- * Carries @ref CLOUD_BATTERY_SAMPLE to the module and @ref CLOUD_BATTERY_DONE back to its
- * observers. The module also receives its own @ref CLOUD_BATTERY_DONE and ignores it.
+ * Carries @ref CLOUD_BATTERY_SAMPLE and @ref CLOUD_OBSERVABILITY_UPLOAD to the module, and
+ * @ref CLOUD_BATTERY_DONE and @ref CLOUD_OBSERVABILITY_DONE back to its observers. The module
+ * also receives its own done messages and ignores them.
  */
 ZBUS_CHAN_DECLARE(cloud_chan);
 
@@ -36,6 +37,22 @@ enum cloud_msg_type {
 	 * It does not carry the outcome, which is logged by the module.
 	 */
 	CLOUD_BATTERY_DONE,
+	/**
+	 * Input: upload the modem observability data to nRF Cloud with `AT%NRFCLOUDOBSUPLOAD`,
+	 * after triggering a heartbeat with `AT%NRFCLOUDOBSHEARTBEAT` when
+	 * CONFIG_APP_CLOUD_OBSERVABILITY_HEARTBEAT is set.
+	 *
+	 * The upload is what makes nRF Cloud list the device as seen, with its hardware and
+	 * software versions.
+	 */
+	CLOUD_OBSERVABILITY_UPLOAD,
+	/**
+	 * Output: the module has finished handling a @ref CLOUD_OBSERVABILITY_UPLOAD.
+	 *
+	 * Published once per request, whether the upload succeeded, was rejected or was
+	 * unauthorized. It does not carry the outcome, which is logged by the module.
+	 */
+	CLOUD_OBSERVABILITY_DONE,
 };
 
 /** @brief Message published on @ref cloud_chan. */

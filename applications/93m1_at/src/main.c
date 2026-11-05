@@ -19,8 +19,12 @@
 
 #if defined(CONFIG_APP_BATTERY)
 #include "modules/battery/battery.h"
-#include "modules/cloud/cloud.h"
 #endif /* CONFIG_APP_BATTERY */
+
+#if defined(CONFIG_APP_BATTERY) || defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+#include "modules/cloud/cloud.h"
+#define HAS_CLOUD_CHAN 1
+#endif
 
 #if defined(CONFIG_APP_BUTTONS)
 #include "modules/buttons/buttons.h"
@@ -36,7 +40,8 @@ BUILD_ASSERT(CONFIG_APP_MAIN_WATCHDOG_TIMEOUT_SECONDS >
 	     CONFIG_APP_MAIN_MSG_PROCESSING_TIMEOUT_SECONDS,
 	     "Watchdog timeout must exceed the maximum message processing time");
 
-#if defined(CONFIG_APP_LOCATION) || defined(CONFIG_APP_BATTERY)
+#if defined(CONFIG_APP_LOCATION) || defined(CONFIG_APP_BATTERY) || \
+	defined(CONFIG_APP_CLOUD_OBSERVABILITY)
 #define HAS_SYNC_STEPS 1
 #endif
 
@@ -64,7 +69,7 @@ ZBUS_CHAN_DEFINE(main_priv_chan,
 	X(network_chan, struct network_msg) \
 	IF_ENABLED(CONFIG_APP_LOCATION, (X(location_chan, struct location_msg))) \
 	IF_ENABLED(CONFIG_APP_BATTERY, (X(battery_chan, struct battery_msg))) \
-	IF_ENABLED(CONFIG_APP_BATTERY, (X(cloud_chan, struct cloud_msg))) \
+	IF_ENABLED(HAS_CLOUD_CHAN, (X(cloud_chan, struct cloud_msg))) \
 	IF_ENABLED(CONFIG_APP_BUTTONS, (X(button_chan, struct button_msg)))
 
 #define MAX_MSG_SIZE MAX_MSG_SIZE_FROM_LIST(CHANNEL_LIST)
@@ -143,12 +148,32 @@ enum main_app_state {
 				/** Reporting the state of charge to nRF Cloud. */
 				STATE_SYNC_BATTERY_SEND,
 #endif /* CONFIG_APP_BATTERY */
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+				/** Uploading the modem observability data to nRF Cloud. */
+				STATE_SYNC_OBSERVABILITY,
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 };
 
 #if defined(CONFIG_APP_LOCATION)
 #define STATE_SYNC_FIRST_STEP STATE_SYNC_LOCATION
 #elif defined(CONFIG_APP_BATTERY)
 #define STATE_SYNC_FIRST_STEP STATE_SYNC_BATTERY_READ
+#else
+#define STATE_SYNC_FIRST_STEP STATE_SYNC_OBSERVABILITY
+#endif
+
+/* The step that follows the battery steps, or the end of the sync when it is the last one. */
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+#define STATE_SYNC_AFTER_BATTERY STATE_SYNC_OBSERVABILITY
+#else
+#define STATE_SYNC_AFTER_BATTERY STATE_SYNC_IDLE
+#endif
+
+/* The step that follows the location step. */
+#if defined(CONFIG_APP_BATTERY)
+#define STATE_SYNC_AFTER_LOCATION STATE_SYNC_BATTERY_READ
+#else
+#define STATE_SYNC_AFTER_LOCATION STATE_SYNC_AFTER_BATTERY
 #endif
 
 /* State object for the main module. */
@@ -196,6 +221,11 @@ static enum smf_state_result state_sync_battery_read_run(void *obj);
 static void state_sync_battery_send_entry(void *obj);
 static enum smf_state_result state_sync_battery_send_run(void *obj);
 #endif /* CONFIG_APP_BATTERY */
+
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+static void state_sync_observability_entry(void *obj);
+static enum smf_state_result state_sync_observability_run(void *obj);
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 
 /** SMF state table */
 static const struct smf_state states[] = {
@@ -253,6 +283,14 @@ static const struct smf_state states[] = {
 				 &states[STATE_SYNCING],
 				 NULL),
 #endif /* CONFIG_APP_BATTERY */
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+	[STATE_SYNC_OBSERVABILITY] =
+		SMF_CREATE_STATE(state_sync_observability_entry,
+				 state_sync_observability_run,
+				 NULL,
+				 &states[STATE_SYNCING],
+				 NULL),
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 };
 
 /** Convenience functions */
@@ -334,6 +372,20 @@ static void battery_report_request(int percent)
 	}
 }
 #endif /* CONFIG_APP_BATTERY */
+
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+static void observability_upload_request(void)
+{
+	struct cloud_msg msg = { .type = CLOUD_OBSERVABILITY_UPLOAD };
+	int err;
+
+	err = zbus_chan_pub(&cloud_chan, &msg, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub cloud_chan, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 
 #if defined(CONFIG_APP_LED)
 static void led_pattern_set(const struct led_msg *pattern)
@@ -554,11 +606,7 @@ static enum smf_state_result state_sync_location_run(void *obj)
 			(const struct location_msg *)state_object->msg_buf;
 
 		if (msg->type == LOCATION_FIX_DONE) {
-#if defined(CONFIG_APP_BATTERY)
-			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_BATTERY_READ]);
-#else
-			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
-#endif /* CONFIG_APP_BATTERY */
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_AFTER_LOCATION]);
 
 			return SMF_EVENT_HANDLED;
 		}
@@ -592,7 +640,7 @@ static enum smf_state_result state_sync_battery_read_run(void *obj)
 			return SMF_EVENT_HANDLED;
 		} else if (msg->type == BATTERY_PERCENT_UNAVAILABLE) {
 			LOG_WRN("No valid battery sample, battery report skipped");
-			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_AFTER_BATTERY]);
 
 			return SMF_EVENT_HANDLED;
 		}
@@ -618,7 +666,7 @@ static enum smf_state_result state_sync_battery_send_run(void *obj)
 		const struct cloud_msg *msg = (const struct cloud_msg *)state_object->msg_buf;
 
 		if (msg->type == CLOUD_BATTERY_DONE) {
-			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_AFTER_BATTERY]);
 
 			return SMF_EVENT_HANDLED;
 		}
@@ -627,6 +675,34 @@ static enum smf_state_result state_sync_battery_send_run(void *obj)
 	return SMF_EVENT_PROPAGATE;
 }
 #endif /* CONFIG_APP_BATTERY */
+
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+static void state_sync_observability_entry(void *obj)
+{
+	ARG_UNUSED(obj);
+
+	LOG_DBG("state_sync_observability_entry");
+
+	observability_upload_request();
+}
+
+static enum smf_state_result state_sync_observability_run(void *obj)
+{
+	struct main_state *state_object = obj;
+
+	if (state_object->chan == &cloud_chan) {
+		const struct cloud_msg *msg = (const struct cloud_msg *)state_object->msg_buf;
+
+		if (msg->type == CLOUD_OBSERVABILITY_DONE) {
+			smf_set_state(SMF_CTX(state_object), &states[STATE_SYNC_IDLE]);
+
+			return SMF_EVENT_HANDLED;
+		}
+	}
+
+	return SMF_EVENT_PROPAGATE;
+}
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 
 static void main_wdt_callback(int channel_id, void *user_data)
 {

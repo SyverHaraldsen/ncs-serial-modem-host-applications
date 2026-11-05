@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
  */
 
+#include <string.h>
 #include <zephyr/kernel.h>
 #include <zephyr/logging/log.h>
 #include <zephyr/zbus/zbus.h>
@@ -18,10 +19,14 @@ LOG_MODULE_REGISTER(cloud, CONFIG_APP_CLOUD_LOG_LEVEL);
 BUILD_ASSERT(CONFIG_APP_CLOUD_WATCHDOG_TIMEOUT_SECONDS >
 	     CONFIG_APP_CLOUD_MSG_PROCESSING_TIMEOUT_SECONDS,
 	     "Watchdog timeout must exceed the maximum message processing time");
+/* AT commands a single message can run in a row, each waiting for the pipe on its own. */
+#define MAX_AT_COMMANDS_PER_MSG (IS_ENABLED(CONFIG_APP_CLOUD_OBSERVABILITY_HEARTBEAT) ? 2 : 1)
+
 BUILD_ASSERT(CONFIG_APP_CLOUD_MSG_PROCESSING_TIMEOUT_SECONDS >
-	     (CONFIG_APP_MODEM_AT_PIPE_WAIT_TIMEOUT_SECONDS +
-	      CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS),
-	     "Message processing timeout must exceed the AT pipe wait plus the AT command timeout");
+	     (MAX_AT_COMMANDS_PER_MSG * (CONFIG_APP_MODEM_AT_PIPE_WAIT_TIMEOUT_SECONDS +
+					 CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS)),
+	     "Message processing timeout must exceed the AT pipe wait plus the AT command timeout "
+	     "of every command a message runs");
 
 ZBUS_CHAN_DEFINE(cloud_chan,
 		 struct cloud_msg,
@@ -74,6 +79,71 @@ static int cloud_send_battery(int percent)
 	return 0;
 }
 
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+/*
+ * Uploads the observability chunks queued on the modem. A failed heartbeat is only logged,
+ * since chunks queued earlier, such as a coredump, can still be uploaded.
+ *
+ * Returns 0 when the upload succeeded, -EACCES when nRF Cloud rejected the modem as
+ * unauthorized, and -ENETUNREACH on any other failed request.
+ */
+static int cloud_send_observability(void)
+{
+	char resp[CONFIG_APP_CLOUD_OBSERVABILITY_RESPONSE_SIZE];
+	uint16_t coap_code;
+	int err;
+
+	if (IS_ENABLED(CONFIG_APP_CLOUD_OBSERVABILITY_HEARTBEAT)) {
+		err = modem_at_run_coap("AT%NRFCLOUDOBSHEARTBEAT", NULL, 0,
+					CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS, NULL);
+		if (err) {
+			LOG_WRN("AT%%NRFCLOUDOBSHEARTBEAT, error: %d", err);
+		}
+	}
+
+	err = modem_at_run_coap("AT%NRFCLOUDOBSUPLOAD", resp, sizeof(resp),
+				CONFIG_APP_CLOUD_AT_TIMEOUT_SECONDS, &coap_code);
+	if (err) {
+		if (coap_code == MODEM_AT_COAP_UNAUTHORIZED) {
+			return -EACCES;
+		}
+		LOG_ERR("modem_at_run_coap, error: %d, CoAP code: %u", err, coap_code);
+		return -ENETUNREACH;
+	}
+
+	resp[strcspn(resp, "\r\n")] = '\0';
+	LOG_DBG("Observability data uploaded: %s", resp);
+
+	return 0;
+}
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
+
+/* Logs the outcome of a request to nRF Cloud and stops on a failure that is not the link's. */
+static void cloud_request_result(const char *what, int err)
+{
+	if (err == -EACCES) {
+		LOG_WRN("Failed to send %s, unauthorized (device may not be onboarded to nRF Cloud)",
+			what);
+	} else if (err == -ENETUNREACH) {
+		LOG_WRN("Failed to send %s, request rejected", what);
+	} else if (err) {
+		LOG_ERR("Sending %s, error: %d", what, err);
+		FATAL_ERROR();
+	}
+}
+
+static void cloud_publish_done(enum cloud_msg_type type)
+{
+	struct cloud_msg msg_done = { .type = type };
+	int err;
+
+	err = zbus_chan_pub(&cloud_chan, &msg_done, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub cloud_chan, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+
 static void cloud_wdt_callback(int channel_id, void *user_data)
 {
 	LOG_ERR("Cloud watchdog expired, channel: %d, thread: %s",
@@ -122,24 +192,14 @@ static void cloud_thread(void)
 			if (msg->type == CLOUD_BATTERY_SAMPLE) {
 				LOG_DBG("Battery sample received: %d%%", msg->battery_percent);
 				err = cloud_send_battery(msg->battery_percent);
-				if (err == -EACCES) {
-					LOG_WRN("Failed to send battery data, unauthorized "
-						"(device may not be onboarded to nRF Cloud)");
-				} else if (err == -ENETUNREACH) {
-					LOG_WRN("Failed to send battery data, request rejected");
-				} else if (err) {
-					LOG_ERR("cloud_send_battery, error: %d", err);
-					FATAL_ERROR();
-				} else {
-				}
-
-				struct cloud_msg msg_done = { .type = CLOUD_BATTERY_DONE };
-
-				err = zbus_chan_pub(&cloud_chan, &msg_done, PUB_TIMEOUT);
-				if (err) {
-					LOG_ERR("zbus_chan_pub cloud_chan, error: %d", err);
-					FATAL_ERROR();
-				}
+				cloud_request_result("battery data", err);
+				cloud_publish_done(CLOUD_BATTERY_DONE);
+#if defined(CONFIG_APP_CLOUD_OBSERVABILITY)
+			} else if (msg->type == CLOUD_OBSERVABILITY_UPLOAD) {
+				err = cloud_send_observability();
+				cloud_request_result("observability data", err);
+				cloud_publish_done(CLOUD_OBSERVABILITY_DONE);
+#endif /* CONFIG_APP_CLOUD_OBSERVABILITY */
 			}
 		} else {
 			LOG_WRN("Unhandled message in cloud thread");
