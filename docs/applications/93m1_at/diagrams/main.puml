@@ -27,6 +27,10 @@ state STATE_RUNNING #FFFFFF {
             STATE_SYNC_BATTERY_SEND : <i>CONFIG_APP_BATTERY</i>
             STATE_SYNC_BATTERY_SEND : entry / publish CLOUD_BATTERY_SAMPLE
 
+            state STATE_SYNC_OBSERVABILITY #FFFFFF;line:94A3B8;line.dashed
+            STATE_SYNC_OBSERVABILITY : <i>CONFIG_APP_CLOUD_OBSERVABILITY</i>
+            STATE_SYNC_OBSERVABILITY : entry / publish CLOUD_OBSERVABILITY_UPLOAD
+
             [*] -[#94A3B8,dashed]-> STATE_SYNC_LOCATION
             [*] -[#94A3B8,dashed]-> STATE_SYNC_BATTERY_READ : [no location]
 
@@ -40,9 +44,10 @@ state STATE_RUNNING #FFFFFF {
         [*] --> STATE_SYNC_IDLE
 
         STATE_SYNC_IDLE -down-> STATE_SYNCING : MAIN_PRIV_SYNC
-        STATE_SYNC_LOCATION -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : LOCATION_FIX_DONE\n[no battery]
-        STATE_SYNC_BATTERY_READ -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : BATTERY_PERCENT_UNAVAILABLE
-        STATE_SYNC_BATTERY_SEND -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : CLOUD_BATTERY_DONE
+        STATE_SYNC_LOCATION -[#94A3B8,dashed]-> STATE_SYNC_OBSERVABILITY : LOCATION_FIX_DONE\n[no battery]
+        STATE_SYNC_BATTERY_READ -[#94A3B8,dashed]-> STATE_SYNC_OBSERVABILITY : BATTERY_PERCENT_UNAVAILABLE
+        STATE_SYNC_BATTERY_SEND -[#94A3B8,dashed]-> STATE_SYNC_OBSERVABILITY : CLOUD_BATTERY_DONE
+        STATE_SYNC_OBSERVABILITY -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : CLOUD_OBSERVABILITY_DONE
     }
     STATE_NETWORK_CONNECTED : entry / sync_schedule(CONFIG_APP_SYNC_BOOT_DELAY_SECONDS)
     STATE_NETWORK_CONNECTED : exit / sync_cancel()
@@ -60,6 +65,7 @@ STATE_RUNNING : any other message / ;
 legend bottom
   The sync work item publishes MAIN_PRIV_SYNC and reschedules itself every CONFIG_APP_SYNC_INTERVAL
   seconds, so a trigger that arrives in STATE_SYNCING is dropped without stopping the timer.
+  A step that is not built is skipped, so the last built step returns to STATE_SYNC_IDLE.
   Fuel gauge sampling is not part of these states. The Battery module samples on its own timer,
   and BATTERY_PERCENT_REQUEST only reads the state of charge from its latest sample.
 end legend

@@ -24,10 +24,11 @@ The application follows the shared [Architecture](../../architecture.md). It con
 
 ## Cloud synchronization
 
-Once the modem has attached to the network it performs a cloud sync 5 seconds after connect and then every 10 minutes (`CONFIG_APP_SYNC_BOOT_DELAY_SECONDS` and `CONFIG_APP_SYNC_INTERVAL`). Each sync runs two steps in order through the modem's nRF Cloud client, and the Main module waits for each step to finish, whether it succeeded or not, before starting the next:
+Once the modem has attached to the network it performs a cloud sync 5 seconds after connect and then every 10 minutes (`CONFIG_APP_SYNC_BOOT_DELAY_SECONDS` and `CONFIG_APP_SYNC_INTERVAL`). Each sync runs three steps in order through the modem's nRF Cloud client, and the Main module waits for each step to finish, whether it succeeded or not, before starting the next:
 
 - **Location:** sends `AT%NRFCLOUDLOCATION=7,1`. The modem collects single-cell, multicell and Wi-Fi measurements, nRF Cloud resolves them to a position, and the result is returned to the host. Change the method with `CONFIG_APP_LOCATION_METHOD` (1 single-cell, 2 multicell, 4 Wi-Fi, or a sum of them).
 - **Battery:** asks the Battery module for the state of charge with `BATTERY_PERCENT_REQUEST`, then sends the answer as a device message: `{"appId":"BATTERY","messageType":"DATA","data":"<percent>"}`. The Battery module samples the fuel gauge on its own every 60 seconds, whether or not the device is connected (`CONFIG_APP_BATTERY_SAMPLE_INTERVAL`), and answers with the latest sample. If it has no valid sample, it answers `BATTERY_PERCENT_UNAVAILABLE` and the step is skipped.
+- **Observability:** triggers a metrics heartbeat with `AT%NRFCLOUDOBSHEARTBEAT` and then uploads the observability chunks queued on the modem with `AT%NRFCLOUDOBSUPLOAD`. nRF Cloud lists the device as seen, with its hardware and software versions, once this data has arrived. The console logs the modem's result line, for example `%NRFCLOUDOBSUPLOAD: UPLOADED,2`. A failed heartbeat is logged and the upload still runs. Set `CONFIG_APP_CLOUD_OBSERVABILITY_HEARTBEAT=n` to upload only what the modem has queued on its own, or `CONFIG_APP_CLOUD_OBSERVABILITY=n` to leave the step out. The modem documents the heartbeat command for debug use.
 
 The Main module tracks this with a hierarchical state machine. Each sync step is its own substate of `STATE_SYNCING`, entered by publishing the request to the module and left when the module publishes that it is done. See [Diagram notation](../../architecture.md#diagram-notation) for how to read the diagram:
 
@@ -37,7 +38,7 @@ The Battery module keeps its own sampling routine. A delayed work item publishes
 
 ![Battery sampling and the battery sync step](diagrams/battery.svg)
 
-A step whose module is not built (`CONFIG_APP_LOCATION` or `CONFIG_APP_BATTERY`) is left out of the sequence. A network disconnect ends a running sync and cancels the sync timer.
+A step whose module or option is not built (`CONFIG_APP_LOCATION`, `CONFIG_APP_BATTERY` or `CONFIG_APP_CLOUD_OBSERVABILITY`) is left out of the sequence. A network disconnect ends a running sync and cancels the sync timer.
 
 The modem is its own nRF Cloud client, so the device ID in nRF Cloud is the modem UUID from `AT%DEVICEUUID`. See [Verify](../../getting-started/93m1-at.md#step-6-verify) for where the data shows up in nRF Cloud.
 
@@ -51,7 +52,7 @@ The Main module sets the host RGB LED on the nRF54L15 side from its state:
 | Synchronization running | Green, 250 ms blink |
 | Idle between synchronizations | Yellow, 50 ms pulse every 15 s |
 
-A synchronization is running from when Main requests the location fix until the battery report has finished. A **Button 1** press or a sync interval that fires in that time is skipped.
+A synchronization is running from when Main requests the location fix until the observability upload has finished. A **Button 1** press or a sync interval that fires in that time is skipped.
 
 The modem's own module LEDs are turned off each time the network connects (`AT%MODULECFG="ledMode",0`), so only the host LED is lit.
 
@@ -76,5 +77,6 @@ Pressing **Button 1** (or running `button 1`) starts a sync right away instead o
 | Device listed under **Fleet → Devices**, but no location or messages visible | The device has not completed a synchronization yet. Check that the console logs the location and battery lines described in [Verify](../../getting-started/93m1-at.md#step-6-verify), or press **Button 1** to start a synchronization right away. |
 | `modem_at: CoAP response: 4.01 Unauthorized (device may not be onboarded to nRF Cloud)` | nRF Cloud rejected the modem. Finish the [claiming steps](../../getting-started/93m1-at.md#step-5-connect-to-nrf-cloud) and check that the device is listed under your team. |
 | `location: Failed to request location, network is down?` or `cloud: Failed to sent battery data, network is down?` | The AT command failed, usually because the modem has not attached yet. Check the link with `at AT+CEREG?`. |
+| `cloud: Failed to send observability data, unauthorized` | nRF Cloud rejected the observability upload with CoAP 4.01. Finish the [claiming steps](../../getting-started/93m1-at.md#step-5-connect-to-nrf-cloud). |
 | `main: No valid battery sample, battery report skipped` | The fuel gauge has no valid sample, so no battery message is sent this sync. Check that a battery is connected to the DK. |
 | Location lines always report `Method: Single-cell` | Multicell and Wi-Fi positioning do not work while the modem is in RRC Connected mode, so nRF Cloud falls back to single-cell. |

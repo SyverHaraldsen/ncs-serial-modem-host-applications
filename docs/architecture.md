@@ -143,7 +143,7 @@ Each module configures its own watchdog timeout and message processing budget wi
 |--------|----:|-----------:|---------:|
 | Main | 30 s / 5 s | 300 s / 290 s | 300 s / 290 s |
 | Network | 120 s / 110 s | 300 s / 290 s | 300 s / 290 s |
-| Cloud | 300 s / 290 s | 120 s / 100 s | 300 s / 290 s |
+| Cloud | 300 s / 290 s | 220 s / 190 s | 300 s / 290 s |
 | FOTA | 300 s / 290 s | Not included | Not included |
 | Location | 120 s / 100 s | 150 s / 130 s | 300 s / 290 s |
 | Battery | 60 s / 30 s | 30 s / 10 s | Not included |
