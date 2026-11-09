@@ -51,10 +51,31 @@ ZBUS_CHAN_DEFINE(location_chan,
 		 ZBUS_OBSERVERS_EMPTY,
 		 ZBUS_MSG_INIT(0));
 
+#if defined(CONFIG_APP_LOCATION_GNSS)
+enum priv_location_msg_type {
+	/* The cellular request failed, try GNSS. */
+	LOCATION_PRIV_GNSS_FALLBACK,
+};
+
+struct priv_location_msg {
+	enum priv_location_msg_type type;
+};
+
+/* The GNSS fallback is its own message, so the task watchdog is fed between the attempts. */
+ZBUS_CHAN_DEFINE(location_priv_chan,
+		 struct priv_location_msg,
+		 NULL,
+		 NULL,
+		 ZBUS_OBSERVERS_EMPTY,
+		 ZBUS_MSG_INIT(0));
+#endif /* CONFIG_APP_LOCATION_GNSS */
+
 ZBUS_MSG_SUBSCRIBER_DEFINE(location);
 
-#define CHANNEL_LIST(X)				\
-	X(location_chan, struct location_msg)
+#define CHANNEL_LIST(X)							\
+	X(location_chan, struct location_msg)				\
+	IF_ENABLED(CONFIG_APP_LOCATION_GNSS,				\
+		   (X(location_priv_chan, struct priv_location_msg)))
 
 #define MAX_MSG_SIZE MAX_MSG_SIZE_FROM_LIST(CHANNEL_LIST)
 
@@ -280,10 +301,9 @@ static int gnss_location_request(void)
 }
 #endif /* CONFIG_APP_LOCATION_GNSS */
 
-static void location_fallback(void)
+static void location_fix_done(void)
 {
-#if defined(CONFIG_APP_LOCATION_GNSS)
-	struct location_msg msg = { .type = LOCATION_GNSS_FALLBACK };
+	struct location_msg msg = { .type = LOCATION_FIX_DONE };
 	int err;
 
 	err = zbus_chan_pub(&location_chan, &msg, PUB_TIMEOUT);
@@ -291,9 +311,37 @@ static void location_fallback(void)
 		LOG_ERR("zbus_chan_pub location_chan, error: %d", err);
 		FATAL_ERROR();
 	}
+}
+
+#if defined(CONFIG_APP_LOCATION_GNSS)
+static void location_gnss_fallback(void)
+{
+	struct priv_location_msg msg = { .type = LOCATION_PRIV_GNSS_FALLBACK };
+	int err;
+
+	err = zbus_chan_pub(&location_priv_chan, &msg, PUB_TIMEOUT);
+	if (err) {
+		LOG_ERR("zbus_chan_pub location_priv_chan, error: %d", err);
+		FATAL_ERROR();
+	}
+}
+#endif /* CONFIG_APP_LOCATION_GNSS */
+
+static void on_fix_request(void)
+{
+	LOG_DBG("Location fix request received");
+
+	if (cell_location_request() == 0) {
+		location_fix_done();
+		return;
+	}
+
+#if defined(CONFIG_APP_LOCATION_GNSS)
+	location_gnss_fallback();
 #else
 	LOG_WRN("No location this sync");
-#endif
+	location_fix_done();
+#endif /* CONFIG_APP_LOCATION_GNSS */
 }
 
 static void location_wdt_callback(int channel_id, void *user_data)
@@ -354,24 +402,27 @@ static void location_thread(void)
 			FATAL_ERROR();
 		}
 
-		if (chan != &location_chan) {
-			LOG_WRN("Unhandled message in location thread");
-			continue;
-		}
+		if (chan == &location_chan) {
+			const struct location_msg *msg = (const struct location_msg *)msg_buf;
 
-		const struct location_msg *msg = (const struct location_msg *)msg_buf;
-
-		if (msg->type == LOCATION_REQUEST) {
-			LOG_DBG("Location request received");
-
-			if (cell_location_request()) {
-				location_fallback();
+			if (msg->type == LOCATION_FIX_REQUEST) {
+				on_fix_request();
 			}
 #if defined(CONFIG_APP_LOCATION_GNSS)
-		} else if (msg->type == LOCATION_GNSS_FALLBACK) {
-			(void)gnss_location_request();
-#endif
+		} else if (chan == &location_priv_chan) {
+			const struct priv_location_msg *msg =
+				(const struct priv_location_msg *)msg_buf;
+
+			if (msg->type == LOCATION_PRIV_GNSS_FALLBACK) {
+				if (gnss_location_request()) {
+					LOG_WRN("No location this sync");
+				}
+
+				location_fix_done();
+			}
+#endif /* CONFIG_APP_LOCATION_GNSS */
 		} else {
+			LOG_WRN("Unhandled message in location thread");
 		}
 	}
 }

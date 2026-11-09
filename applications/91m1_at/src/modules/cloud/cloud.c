@@ -14,7 +14,6 @@
 
 #include "app_common.h"
 #include "modules/modem_at/modem_at.h"
-#include "modules/network/network.h"
 #include "cloud.h"
 
 LOG_MODULE_REGISTER(cloud, CONFIG_APP_CLOUD_LOG_LEVEL);
@@ -84,8 +83,8 @@ ZBUS_CHAN_DEFINE(cloud_priv_chan,
 ZBUS_MSG_SUBSCRIBER_DEFINE(cloud);
 
 #define CHANNEL_LIST(X)				\
-	X(cloud_priv_chan, struct priv_msg)	\
-	X(network_chan, struct network_msg)
+	X(cloud_chan, struct cloud_msg)		\
+	X(cloud_priv_chan, struct priv_msg)
 
 #define MAX_MSG_SIZE MAX_MSG_SIZE_FROM_LIST(CHANNEL_LIST)
 
@@ -104,8 +103,8 @@ struct cloud_state_object {
 	struct smf_ctx ctx;
 	const struct zbus_channel *chan;
 	uint8_t msg_buf[MAX_MSG_SIZE];
-	/* Latest network state, tracked in every state. */
-	bool network_connected;
+	/* Main has requested a connection, tracked in every state. */
+	bool connect_requested;
 	/* Provisioning ran to completion since boot. */
 	bool provisioned;
 	/* The host took LTE offline for the provisioning session. */
@@ -331,14 +330,14 @@ static enum smf_state_result disconnected_run(void *obj)
 	struct cloud_state_object *state = obj;
 	bool start = false;
 
-	if (state->chan == &network_chan) {
-		const struct network_msg *msg = (const struct network_msg *)state->msg_buf;
+	if (state->chan == &cloud_chan) {
+		const struct cloud_msg *msg = (const struct cloud_msg *)state->msg_buf;
 
-		start = (msg->type == NETWORK_CONNECTED);
+		start = (msg->type == CLOUD_CONNECT);
 	} else if (state->chan == &cloud_priv_chan) {
 		const struct priv_msg *msg = (const struct priv_msg *)state->msg_buf;
 
-		start = (msg->type == PRIV_RETRY) && state->network_connected;
+		start = (msg->type == PRIV_RETRY) && state->connect_requested;
 	} else {
 	}
 
@@ -376,7 +375,7 @@ static void provisioning_status_handle(struct cloud_state_object *state, int sta
 	case XNRFPROV_DONE:
 		LOG_INF("Provisioning done");
 		state->provisioned = true;
-		smf_set_state(SMF_CTX(state), state->network_connected
+		smf_set_state(SMF_CTX(state), state->connect_requested
 					      ? &states[STATE_CONNECTING]
 					      : &states[STATE_DISCONNECTED]);
 		break;
@@ -401,7 +400,7 @@ static enum smf_state_result provisioning_run(void *obj)
 	const struct priv_msg *msg = (const struct priv_msg *)state->msg_buf;
 
 	if (state->chan != &cloud_priv_chan) {
-		/* Network events during the session are tracked by the thread; the modem
+		/* Connect requests during the session are tracked by the thread; the modem
 		 * reports through #XNRFPROV when it needs the link.
 		 */
 		return SMF_EVENT_HANDLED;
@@ -440,8 +439,8 @@ static enum smf_state_result connecting_run(void *obj)
 	bool ready = false;
 	int err;
 
-	if (state->chan == &network_chan) {
-		if (!state->network_connected) {
+	if (state->chan == &cloud_chan) {
+		if (!state->connect_requested) {
 			smf_set_state(SMF_CTX(state), &states[STATE_DISCONNECTED]);
 		}
 
@@ -487,7 +486,7 @@ static enum smf_state_result connected_run(void *obj)
 {
 	struct cloud_state_object *state = obj;
 
-	if (state->chan == &network_chan && !state->network_connected) {
+	if (state->chan == &cloud_chan && !state->connect_requested) {
 		smf_set_state(SMF_CTX(state), &states[STATE_DISCONNECTED]);
 	}
 
@@ -546,15 +545,16 @@ static void cloud_thread(void)
 			FATAL_ERROR();
 		}
 
-		if (cloud_state.chan == &network_chan) {
-			const struct network_msg *msg =
-				(const struct network_msg *)cloud_state.msg_buf;
+		if (cloud_state.chan == &cloud_chan) {
+			const struct cloud_msg *msg = (const struct cloud_msg *)cloud_state.msg_buf;
 
-			if (msg->type == NETWORK_CONNECTED) {
-				cloud_state.network_connected = true;
-			} else if (msg->type == NETWORK_DISCONNECTED) {
-				cloud_state.network_connected = false;
+			if (msg->type == CLOUD_CONNECT) {
+				cloud_state.connect_requested = true;
+			} else if (msg->type == CLOUD_DISCONNECT) {
+				cloud_state.connect_requested = false;
 			} else {
+				/* Own status messages. */
+				continue;
 			}
 		}
 

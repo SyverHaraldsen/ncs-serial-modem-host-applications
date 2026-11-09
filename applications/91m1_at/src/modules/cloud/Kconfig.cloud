@@ -8,11 +8,11 @@ menuconfig APP_CLOUD
 	bool "Cloud module (nRF Cloud through the Serial Modem)"
 	default y
 	depends on APP_MODEM_AT
-	depends on APP_NETWORK
 	help
 	  Onboards the Serial Modem to nRF Cloud with its provisioning commands
-	  (AT#XNRFPROV) and connects the modem's nRF Cloud client (AT#XNRFCLOUD).
-	  The connection state is reported on cloud_chan.
+	  (AT#XNRFPROV) and connects the modem's nRF Cloud client (AT#XNRFCLOUD)
+	  when Main requests it on cloud_chan. The connection state is reported on
+	  the same channel.
 
 if APP_CLOUD
 
