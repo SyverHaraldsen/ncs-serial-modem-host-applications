@@ -85,6 +85,14 @@
 
 &gpio1 {
 	status = "okay";
+
+	/* The LEDs are unused. Drive them low instead of leaving the pins floating. */
+	led-off {
+		gpio-hog;
+		gpios = <22 GPIO_ACTIVE_HIGH>, <25 GPIO_ACTIVE_HIGH>,
+			<27 GPIO_ACTIVE_HIGH>, <28 GPIO_ACTIVE_HIGH>;
+		output-low;
+	};
 };
 
 /* Non-secure hardware watchdog, fallback for CONFIG_TASK_WDT_HW_FALLBACK. */
