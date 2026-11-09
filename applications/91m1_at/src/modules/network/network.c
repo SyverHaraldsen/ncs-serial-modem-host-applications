@@ -14,6 +14,7 @@
 
 #include "app_common.h"
 #include "modules/modem_at/modem_at.h"
+#include "modules/modem_power/modem_power.h"
 #include "network.h"
 
 LOG_MODULE_REGISTER(network, CONFIG_APP_NETWORK_LOG_LEVEL);
@@ -152,6 +153,10 @@ static void connected_entry(void *obj)
 
 	LOG_DBG("%s", __func__);
 	LOG_INF("Network connected");
+
+#if IS_ENABLED(CONFIG_APP_MODEM_POWER)
+	modem_power_saving_configure();
+#endif
 }
 
 static enum smf_state_result connected_run(void *obj)
@@ -199,8 +204,6 @@ static int modem_configure(void)
 		"AT+CEREG=5",
 		/* LTE-M, NB-IoT and GNSS, no preference. */
 		"AT%XSYSTEMMODE=1,1,1,0",
-		/* PSM gives GNSS time to run while LTE is idle. */
-		"AT+CPSMS=1,,,\"00100001\",\"00001010\"",
 	};
 	int64_t deadline = k_uptime_get() +
 			   (CONFIG_APP_NETWORK_MODEM_READY_TIMEOUT_SECONDS * MSEC_PER_SEC);
