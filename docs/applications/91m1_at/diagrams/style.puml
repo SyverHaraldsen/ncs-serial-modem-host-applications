@@ -1,0 +1,99 @@
+' SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+' Shared skin for the 93m1_at documentation diagrams.
+' Included by every diagram source; not a diagram on its own.
+' Notation: ../architecture.md#diagram-notation
+
+skinparam backgroundColor #FFFFFF
+skinparam shadowing false
+skinparam defaultFontName Helvetica
+skinparam defaultFontSize 13
+' Left-aligned descriptions keep entry/exit and event lists readable.
+skinparam defaultTextAlignment left
+skinparam roundCorner 10
+skinparam Nodesep 35
+skinparam Ranksep 45
+skinparam ArrowColor #6B7280
+skinparam ArrowFontColor #374151
+skinparam ArrowFontSize 11
+skinparam TitleFontSize 15
+skinparam TitleFontColor #0F172A
+
+hide empty description
+
+' State names and descriptions share the attribute font in PlantUML, so both
+' are sized and coloured here.
+skinparam state {
+    BackgroundColor #F1F5F9
+    BorderColor #00A9CE
+    FontColor #0F172A
+    FontSize 12
+    AttributeFontSize 12
+    AttributeFontColor #334155
+    StartColor #00A9CE
+    EndColor #00A9CE
+}
+
+' Present only in some Kconfig configurations.
+skinparam state<<optional>> {
+    BackgroundColor #FFFFFF
+    BorderColor #94A3B8
+}
+
+skinparam componentStyle rectangle
+skinparam component {
+    BackgroundColor #F8FAFC
+    BorderColor #00A9CE
+    FontColor #0F172A
+    FontStyle bold
+}
+
+' Reached by direct function call rather than zbus messages.
+skinparam component<<direct>> {
+    BackgroundColor #FFFFFF
+    BorderColor #94A3B8
+}
+
+skinparam rectangle {
+    BackgroundColor #FFFFFF
+    BorderColor #CBD5E1
+    FontColor #475569
+    FontStyle plain
+}
+
+skinparam sequence {
+    ArrowThickness 1
+    LifeLineBorderColor #CBD5E1
+    LifeLineBackgroundColor #F1F5F9
+    ParticipantBackgroundColor #F8FAFC
+    ParticipantBorderColor #00A9CE
+    ParticipantFontColor #0F172A
+    ParticipantFontStyle bold
+    ParticipantPadding 20
+    BoxBackgroundColor #FFFFFF
+    BoxBorderColor #CBD5E1
+    BoxFontColor #475569
+    GroupBackgroundColor #E2E8F0
+    GroupBorderColor #94A3B8
+    GroupHeaderFontColor #0F172A
+    GroupHeaderFontSize 11
+    GroupBodyBackgroundColor #FFFFFF
+    DividerBackgroundColor #F1F5F9
+    DividerBorderColor #CBD5E1
+    DividerFontColor #0F172A
+    DividerFontSize 12
+}
+
+skinparam note {
+    BackgroundColor #FFFBEB
+    BorderColor #E2C08D
+    FontColor #475569
+    FontSize 11
+    FontStyle plain
+}
+
+skinparam legend {
+    BackgroundColor #FFFFFF
+    BorderColor #CBD5E1
+    FontColor #475569
+    FontSize 11
+}

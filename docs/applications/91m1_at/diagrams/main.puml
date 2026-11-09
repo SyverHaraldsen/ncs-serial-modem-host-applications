@@ -1,0 +1,51 @@
+@startuml
+' SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+' Main module state machine in applications/91m1_at/src/main.c.
+' Notation: ../architecture.md#diagram-notation
+!include style.puml
+
+state STATE_RUNNING #FFFFFF {
+    state STATE_CLOUD_DISCONNECTED
+    STATE_CLOUD_DISCONNECTED : BUTTON_1 / ;  <i>CONFIG_APP_BUTTONS</i>
+
+    state STATE_CLOUD_CONNECTED #FFFFFF {
+        state STATE_SYNC_IDLE
+        STATE_SYNC_IDLE : BUTTON_1 / sync_schedule(K_NO_WAIT)  <i>CONFIG_APP_BUTTONS</i>
+
+        state STATE_SYNCING #FFFFFF {
+            state STATE_SYNC_LOCATION #FFFFFF;line:94A3B8;line.dashed
+            STATE_SYNC_LOCATION : <i>CONFIG_APP_LOCATION</i>
+            STATE_SYNC_LOCATION : entry / publish LOCATION_FIX_REQUEST
+
+            [*] -[#94A3B8,dashed]-> STATE_SYNC_LOCATION
+        }
+        STATE_SYNCING : MAIN_PRIV_SYNC / ;
+        STATE_SYNCING : BUTTON_1 / ;  <i>CONFIG_APP_BUTTONS</i>
+
+        [*] --> STATE_SYNC_IDLE
+
+        STATE_SYNC_IDLE -down-> STATE_SYNCING : MAIN_PRIV_SYNC
+        STATE_SYNC_LOCATION -[#94A3B8,dashed]up-> STATE_SYNC_IDLE : LOCATION_FIX_DONE
+    }
+    STATE_CLOUD_CONNECTED : entry / sync_schedule(CONFIG_APP_SYNC_BOOT_DELAY_SECONDS)
+    STATE_CLOUD_CONNECTED : exit / sync_cancel()
+
+    [*] --> STATE_CLOUD_DISCONNECTED
+
+    STATE_CLOUD_DISCONNECTED -down-> STATE_CLOUD_CONNECTED : CLOUD_CONNECTED
+    STATE_CLOUD_CONNECTED -up-> STATE_CLOUD_DISCONNECTED : \nCLOUD_DISCONNECTED
+}
+STATE_RUNNING : NETWORK_CONNECTED / publish CLOUD_CONNECT
+STATE_RUNNING : NETWORK_DISCONNECTED / publish CLOUD_DISCONNECT
+STATE_RUNNING : BUTTON_2 / ;  <i>CONFIG_APP_BUTTONS</i>
+STATE_RUNNING : any other message / ;
+
+[*] --> STATE_RUNNING
+
+legend bottom
+  The sync work item publishes MAIN_PRIV_SYNC and reschedules itself every CONFIG_APP_SYNC_INTERVAL
+  seconds, so a trigger that arrives in STATE_SYNCING is dropped without stopping the timer.
+  Without CONFIG_APP_LOCATION, STATE_SYNCING is not built and a sync tick does nothing.
+end legend
+
+@enduml

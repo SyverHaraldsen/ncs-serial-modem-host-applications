@@ -1,0 +1,31 @@
+@startuml
+' SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+' Location fix with GNSS fallback, in applications/91m1_at/src/modules/location/location.c
+' and src/main.c.
+!include style.puml
+
+box "Host application" #FFFFFF
+    participant "main()" as Main
+    participant "Location\nmodule" as Location
+end box
+participant "Serial Modem" as SM
+participant "nRF Cloud" as Cloud9
+
+== STATE_SYNC_LOCATION ==
+Main -> Location : LOCATION_FIX_REQUEST
+Location -> SM : AT#XNRFCLOUDPOS
+SM -> Cloud9 : cell measurements
+alt cellular fix
+    SM -> Location : URC #XNRFCLOUDPOS: 0,...
+    Location -> Main : LOCATION_FIX_DONE
+else cellular request failed, CONFIG_APP_LOCATION_GNSS
+    Location -> Location : LOCATION_PRIV_GNSS_FALLBACK\n(location_priv_chan)
+    note right of Location : watchdog fed between the attempts
+    Location -> SM : AT#XGNSS=1,1,0,<timeout>
+    SM -> Location : URC #XGNSSPOS, or #XGNSS on timeout
+    SM -> Cloud9 : GNSS fix (send_location)
+    Location -> Main : LOCATION_FIX_DONE
+end
+note over Main : back to STATE_SYNC_IDLE
+
+@enduml
