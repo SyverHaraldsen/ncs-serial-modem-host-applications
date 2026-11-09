@@ -1,0 +1,27 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_BUTTONS
+	bool "Buttons module"
+	select DK_LIBRARY
+	default y
+	help
+	  Reports physical button presses on button_chan. What each button
+	  number means is decided by the modules observing that channel.
+
+if APP_BUTTONS
+
+config APP_BUTTONS_SHELL
+	bool "button shell command"
+	default y if SHELL
+	help
+	  Adds shell support for button presses.
+
+module = APP_BUTTONS
+module-str = Buttons
+source "subsys/logging/Kconfig.template.log_config"
+
+endif # APP_BUTTONS

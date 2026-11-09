@@ -27,3 +27,5 @@ target_sources_ifdef(CONFIG_SHELL app PRIVATE src/modules/network/network_shell.
 target_sources_ifdef(CONFIG_APP_CLOUD app PRIVATE src/modules/cloud/cloud.c)
 target_sources_ifdef(CONFIG_APP_LOCATION app PRIVATE src/modules/location/location.c)
 target_sources_ifdef(CONFIG_APP_MODEM_AT_SHELL app PRIVATE src/modules/modem_at/modem_at_shell.c)
+target_sources_ifdef(CONFIG_APP_BUTTONS app PRIVATE src/modules/buttons/buttons.c)
+target_sources_ifdef(CONFIG_APP_BUTTONS_SHELL app PRIVATE src/modules/buttons/buttons_shell.c)

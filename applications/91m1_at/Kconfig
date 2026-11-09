@@ -11,6 +11,7 @@ rsource "src/modules/network/Kconfig.network"
 rsource "src/modules/modem_at/Kconfig.modem_at"
 rsource "src/modules/cloud/Kconfig.cloud"
 rsource "src/modules/location/Kconfig.location"
+rsource "src/modules/buttons/Kconfig.buttons"
 
 endmenu
 

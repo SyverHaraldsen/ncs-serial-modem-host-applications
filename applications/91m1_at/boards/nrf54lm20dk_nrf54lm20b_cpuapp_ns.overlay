@@ -11,12 +11,21 @@
  * P1.23–P1.24 (RTS/CTS, P3 connector). DTR/reset use P1.11/P1.10 (P2
  * connector). RI (P1.12) is wired but unused, as DTR stays asserted.
  *
+ * Application button 1 is BUTTON0 and button 2 is BUTTON1. BUTTON3 is removed,
+ * as it is the only button on gpio0. The DK library adds one GPIO callback to
+ * every port that has a button, and linking it into both port lists drops the
+ * other gpio1 callbacks.
+ *
  * Set matching VDD on both DKs (typically 1.8 V).
  *
  * Wiring: see docs/getting-started/ppp-nrf54.md.
  */
 
 / {
+	aliases {
+		/delete-property/ sw3;
+	};
+
 	chosen {
 		zephyr,console = &uart30;
 		zephyr,shell-uart = &uart30;
@@ -32,6 +41,8 @@
 		mdm-dtr-gpios = <&gpio1 11 GPIO_ACTIVE_LOW>;
 	};
 };
+
+/delete-node/ &button3;
 
 &uart30 {
 	status = "okay";
