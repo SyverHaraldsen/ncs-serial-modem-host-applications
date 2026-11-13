@@ -1,0 +1,12 @@
+# ARDUCAM_MEGA
+
+# Copyright (c) 2023 Arducam Technology Co., Ltd. <www.arducam.com>
+# SPDX-License-Identifier: Apache-2.0
+#
+# NOTICE: This file has been modified by Nordic Semiconductor ASA.
+
+description: Arducam Mega CMOS video sensor (Nordic fork)
+
+compatible: "nordic,arducam-mega"
+
+include: spi-device.yaml

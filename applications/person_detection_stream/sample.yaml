@@ -1,0 +1,26 @@
+sample:
+  name: Person detection video stream
+  description: Camera video with person detection, streamed over UDP on Wi-Fi or on LTE through an nRF93M1.
+common:
+  build_only: true
+  tags:
+    - ci_build
+tests:
+  serial_modem_host.applications.person_detection_stream.wifi:
+    integration_platforms:
+      - nrf7120dk/nrf7120e/cpuapp
+    platform_allow:
+      - nrf7120dk/nrf7120e/cpuapp
+  serial_modem_host.applications.person_detection_stream.lte.nrf7120dk:
+    extra_args:
+      - EXTRA_CONF_FILE=overlay-lte-nrf7120dk.conf
+      - EXTRA_DTC_OVERLAY_FILE=overlay-lte-nrf7120dk.overlay
+    integration_platforms:
+      - nrf7120dk/nrf7120e/cpuapp
+    platform_allow:
+      - nrf7120dk/nrf7120e/cpuapp
+  serial_modem_host.applications.person_detection_stream.nrf54lm20dk:
+    integration_platforms:
+      - nrf54lm20dk/nrf54lm20b/cpuapp
+    platform_allow:
+      - nrf54lm20dk/nrf54lm20b/cpuapp

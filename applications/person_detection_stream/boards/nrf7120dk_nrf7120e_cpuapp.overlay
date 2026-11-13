@@ -1,0 +1,102 @@
+/*
+ * Copyright (c) 2026 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ *
+ * nRF7120 DK (nRF7120E) streaming over Wi-Fi, with an Arducam Mega on SPIM24 through
+ * level shifters (the DK runs at 1.8 V, the camera at 3.3 V). The nRF93M1 modem comes
+ * from overlay-lte-nrf7120dk.overlay.
+ *
+ *   Arducam Mega     7120 DK
+ *   SCK        <-    P1.12  SPIM24
+ *   MISO       ->    P1.13
+ *   MOSI       <-    P1.14
+ *   CS         <-    P1.15
+ *
+ * Console and shell stay on VCOM0 (UARTE20).
+ */
+
+/* Wi-Fi ROM patch matching CONFIG_WIFI_NRF71_PATCH_VERSION_0_1_0 */
+#include "../../../../nrfxlib/nrf71_wifi/bins/0.1.0/nrf7120_wifi_patch.dtsi"
+
+/ {
+	chosen {
+		zephyr,entropy = &psa_rng;
+	};
+
+	psa_rng: psa-rng {
+		compatible = "zephyr,psa-crypto-rng";
+		status = "okay";
+	};
+};
+
+&pinctrl {
+	spi24_default: spi24_default {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 1, 12)>,
+				<NRF_PSEL(SPIM_MISO, 1, 13)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 14)>;
+			bias-pull-down;
+		};
+	};
+
+	spi24_sleep: spi24_sleep {
+		group1 {
+			psels = <NRF_PSEL(SPIM_SCK, 1, 12)>,
+				<NRF_PSEL(SPIM_MISO, 1, 13)>,
+				<NRF_PSEL(SPIM_MOSI, 1, 14)>;
+			bias-pull-down;
+			low-power-enable;
+		};
+	};
+};
+
+&spi24 {
+	compatible = "nordic,nrf-spim";
+	status = "okay";
+	pinctrl-0 = <&spi24_default>;
+	pinctrl-1 = <&spi24_sleep>;
+	pinctrl-names = "default", "sleep";
+	overrun-character = <0x00>;
+	zephyr,pm-device-runtime-auto;
+	cs-gpios = <&gpio1 15 GPIO_ACTIVE_LOW>;
+
+	arducam_mega: arducam-mega@0 {
+		compatible = "nordic,arducam-mega";
+		reg = <0>;
+		spi-max-frequency = <8000000>;
+	};
+};
+
+/*
+ * The Wi-Fi core's IPC buffers sit at 0x200c0000-0x200c5000 inside cpuapp_sram, which
+ * the board does not keep out of the image; past 768 KiB the main stack landed there.
+ * Link below them and give the SRAM above them to the Axon interlayer buffer
+ * (CONFIG_NRF_AXON_INTERLAYER_BUFFER_MEMREGION_NAME).
+ */
+/ {
+	chosen {
+		zephyr,sram = &app_sram;
+	};
+};
+
+&cpuapp_sram {
+	app_sram: sram@0 {
+		compatible = "mmio-sram";
+		reg = <0x0 DT_SIZE_K(768)>;
+	};
+
+	axon_sram: sram@c5000 {
+		compatible = "zephyr,memory-region", "mmio-sram";
+		reg = <0xc5000 0x38fe0>;
+		zephyr,memory-region = "AXON_SRAM";
+	};
+};
+
+&axon {
+	status = "okay";
+};
+
+&wdt31 {
+	status = "okay";
+};

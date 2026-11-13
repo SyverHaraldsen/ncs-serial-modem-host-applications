@@ -1,0 +1,44 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_DETECTOR
+	bool "Person detection on the Axon NPU"
+	default y
+	depends on NRF_AXON
+	help
+	  Runs the sdk-edge-ai person_det model on RGB565 images fed to it,
+	  with the JPEG decoder that produces them.
+
+if APP_DETECTOR
+
+config APP_DETECTOR_MAX_BOXES
+	int "Most detections reported per frame"
+	default 8
+
+config APP_DETECTOR_MIN_SCORE
+	int "Default detection threshold (percent)"
+	range 0 100
+	default 50
+	help
+	  Boxes scoring below this are dropped, until a threshold is stored with
+	  `detect confidence`. It cannot go below SCORE_THRESHOLD.
+
+# Read by the sdk-edge-ai person_detection postprocessing; the floor of the runtime threshold.
+config SCORE_THRESHOLD
+	int "Detection score floor (per mille)"
+	range 0 1000
+	default 100
+
+config IOU_THRESHOLD
+	int "Non-maximum suppression IoU threshold (per mille)"
+	range 0 1000
+	default 450
+
+module = APP_DETECTOR
+module-str = Detector
+source "subsys/logging/Kconfig.template.log_config"
+
+endif

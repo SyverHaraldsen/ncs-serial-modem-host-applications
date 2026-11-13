@@ -14,6 +14,7 @@ Host-side firmware for Nordic Smart Modem modules. The applications in this repo
 | nRF93M1 DK | [PPP Host Application](docs/applications/ppp/README.md) | The same application on the integrated nRF93M1 modem, with FOTA, remote debugging, cell and Wi-Fi location, and battery reporting. |
 | nRF93M1 DK | [nRF93M1 AT Host Application](docs/applications/93m1_at/README.md) | A minimal host. The modem connects to nRF Cloud with its built-in client, and the host drives it with AT commands. |
 | nRF54LM20B DK, wired to an nRF9151 DK | [nRF91 AT Host Application](docs/applications/91m1_at/README.md) | A minimal location tracker. The Serial Modem onboards itself to nRF Cloud and resolves cell or GNSS location, and the host drives it with AT commands. |
+| nRF7120 DK, or nRF54LM20B DK wired to an nRF93M1 DK | [Person detection video stream](docs/applications/person_detection_stream/README.md) | Streams camera video with person detection over UDP, on Wi-Fi or on LTE through the nRF93M1 modem. No cloud. |
 
 ## Get started
 

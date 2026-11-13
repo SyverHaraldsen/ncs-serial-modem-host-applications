@@ -1,0 +1,61 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_DETECTION
+	bool "Person detection module"
+	default y
+	depends on APP_DETECTOR
+	depends on APP_CAMERA
+	depends on APP_FRAME_POOL
+	depends on SETTINGS
+	help
+	  Takes a copy of the newest camera JPEG whenever it is idle, decodes it
+	  at the scale that fits the model and runs the detector in its own thread, so detection
+	  never holds back the stream. Boxes follow their frame on the stream.
+
+if APP_DETECTION
+
+config APP_DETECTION_SHELL
+	bool "detect shell command"
+	default y if SHELL
+
+config APP_DETECTION_FPS
+	int "Default detection rate"
+	range 0 APP_DETECTION_FPS_MAX
+	default 0
+	help
+	  Detections per second until one is stored with `detect fps`. 0 is
+	  `detect fps max`: as fast as the decoder and the NPU keep up.
+
+config APP_DETECTION_FPS_MAX
+	int "Highest detection rate accepted"
+	default 30
+
+config APP_DETECTION_SLOT_SIZE
+	int "Frame slot size (bytes)"
+	default 12288
+	help
+	  Holds the copy of the JPEG being detected. Larger frames are skipped.
+
+config APP_DETECTION_THREAD_STACK_SIZE
+	int "Thread stack size"
+	default 4096
+	help
+	  Runs JPEG decoding and inference.
+
+config APP_DETECTION_WATCHDOG_TIMEOUT_SECONDS
+	int "Watchdog timeout"
+	default 60
+
+config APP_DETECTION_STATS_INTERVAL_SECONDS
+	int "Statistics log interval (seconds)"
+	default 10
+
+module = APP_DETECTION
+module-str = Detection
+source "subsys/logging/Kconfig.template.log_config"
+
+endif

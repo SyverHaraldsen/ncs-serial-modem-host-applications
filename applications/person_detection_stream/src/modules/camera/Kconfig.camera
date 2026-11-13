@@ -1,0 +1,114 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_CAMERA
+	bool "Arducam Mega camera"
+	default y
+	depends on APP_FRAME_POOL
+	depends on DT_HAS_NORDIC_ARDUCAM_MEGA_ENABLED
+	depends on SETTINGS
+	select SPI
+	select VIDEO
+	help
+	  Captures JPEG frames encoded by an Arducam Mega SPI camera, streams
+	  them as they are and offers each one to the detection module.
+
+if APP_CAMERA
+
+config APP_CAMERA_SHELL
+	bool "camera shell command"
+	default y if SHELL
+
+config APP_CAMERA_FPS_LIMIT
+	int "Default frame rate limit"
+	range 0 APP_CAMERA_FPS_MAX
+	default 0
+	help
+	  Frames streamed per second until one is stored with `camera fps`.
+	  0 is `camera fps max`: every frame the camera delivers.
+
+config APP_CAMERA_FPS_MAX
+	int "Highest frame rate limit accepted"
+	default 30
+
+config APP_CAMERA_WIDTH
+	int "Frame width"
+	default 320
+
+config APP_CAMERA_HEIGHT
+	int "Frame height"
+	default 240
+
+config APP_CAMERA_JPEG_QUALITY
+	int "Camera JPEG quality (0 high, 1 default, 2 low)"
+	range 0 2
+	default 2
+	help
+	  The modem link bounds the stream, so smaller frames give a higher
+	  frame rate.
+
+config APP_CAMERA_HIGH_WIDTH
+	int "High profile frame width"
+	default 0
+	help
+	  Frame size used over a fast link such as Wi-Fi. 0 leaves only the
+	  CONFIG_APP_CAMERA_WIDTH x HEIGHT profile. Raise
+	  CONFIG_APP_CAMERA_BUFFER_SIZE and CONFIG_APP_DETECTION_SLOT_SIZE to fit.
+
+config APP_CAMERA_HIGH_HEIGHT
+	int "High profile frame height"
+	default 0
+
+config APP_CAMERA_HIGH_JPEG_QUALITY
+	int "High profile JPEG quality (0 high, 1 default, 2 low)"
+	range 0 2
+	default 1
+
+config APP_CAMERA_BUFFER_COUNT
+	int "Video buffers"
+	range 3 8
+	default 3
+	help
+	  At most two are held by this module, so the driver always has one to
+	  capture into.
+
+config APP_CAMERA_BUFFER_SIZE
+	int "Video buffer size (bytes)"
+	default 16384
+	help
+	  Holds one JPEG frame. Larger frames are dropped as invalid; raise it
+	  for the higher JPEG qualities.
+
+config APP_CAMERA_THREAD_STACK_SIZE
+	int "Capture thread stack size"
+	default 2048
+
+config APP_CAMERA_PROCESS_THREAD_STACK_SIZE
+	int "Processing thread stack size"
+	default 2048
+	help
+	  Slices frames into chunks.
+
+config APP_CAMERA_WATCHDOG_TIMEOUT_SECONDS
+	int "Watchdog timeout"
+	default 60
+
+config APP_CAMERA_STATS_INTERVAL_SECONDS
+	int "Statistics log interval (seconds)"
+	default 10
+
+module = APP_CAMERA
+module-str = Camera
+source "subsys/logging/Kconfig.template.log_config"
+
+endif
+
+# Sized for APP_CAMERA_BUFFER_COUNT x APP_CAMERA_BUFFER_SIZE plus allocator overhead.
+config VIDEO_BUFFER_POOL_HEAP_SIZE
+	default 50176 if APP_CAMERA
+
+config VIDEO_BUFFER_POOL_NUM_MAX
+	default 3 if APP_CAMERA

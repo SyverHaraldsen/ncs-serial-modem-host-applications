@@ -83,6 +83,7 @@ nav:
       - Remote debugging: applications/ppp/remote-debugging.md
     - nRF93M1 AT Host Application: applications/93m1_at/README.md
     - nRF91 AT Host Application: applications/91m1_at/README.md
+    - Person detection video stream: applications/person_detection_stream/README.md
   - Architecture: architecture.md
   - Application FOTA: app-fota.md
   - Release artifacts: release-artifacts.md

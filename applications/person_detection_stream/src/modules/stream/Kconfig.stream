@@ -1,0 +1,67 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_STREAM
+	bool "UDP stream module"
+	default y
+	depends on NET_SOCKETS
+	depends on NET_UDP
+	depends on SETTINGS
+	depends on APP_FRAME_POOL
+	select NET_CONTEXT_SNDTIMEO
+	help
+	  Sends frame chunks as datagrams to a UDP endpoint.
+	  Main tells it when the network is up; the user starts, stops and
+	  points it from the shell.
+
+if APP_STREAM
+
+config APP_STREAM_SHELL
+	bool "stream shell command"
+	default y if SHELL
+
+config APP_STREAM_HOST
+	string "Default endpoint host name or IPv4 address"
+	default ""
+	help
+	  Used until an endpoint is stored with `stream endpoint <host> [port]`.
+
+config APP_STREAM_PORT
+	int "Default endpoint UDP port"
+	range 1 65535
+	default 5005
+
+config APP_STREAM_DATAGRAM_SIZE
+	int "Datagram size in bytes, header included"
+	range 64 1400
+	default 1200
+	help
+	  Kept below the PPP MTU so the IP layer never fragments.
+
+config APP_STREAM_SEND_TIMEOUT_MS
+	int "Socket send timeout (ms)"
+	default 1000
+	help
+	  Bounds how long a send may block when the network buffers are exhausted.
+	  A timed-out datagram is counted as dropped.
+
+config APP_STREAM_STATS_INTERVAL_SECONDS
+	int "Statistics log interval (seconds)"
+	default 5
+
+config APP_STREAM_THREAD_STACK_SIZE
+	int "Thread stack size"
+	default 3072
+
+config APP_STREAM_WATCHDOG_TIMEOUT_SECONDS
+	int "Watchdog timeout"
+	default 60
+
+module = APP_STREAM
+module-str = Stream
+source "subsys/logging/Kconfig.template.log_config"
+
+endif

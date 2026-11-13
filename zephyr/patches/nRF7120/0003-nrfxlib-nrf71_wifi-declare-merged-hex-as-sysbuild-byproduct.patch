@@ -1,0 +1,13 @@
+diff --git a/nrf71_wifi/zephyr/CMakeLists.txt b/nrf71_wifi/zephyr/CMakeLists.txt
+index d7243f879..75b0fc733 100644
+--- a/nrf71_wifi/zephyr/CMakeLists.txt
++++ b/nrf71_wifi/zephyr/CMakeLists.txt
+@@ -229,6 +229,8 @@ else()
+     VERBATIM
+   )
+   add_custom_target(nrf71_wifi_patch_merge ALL DEPENDS ${merge_byproducts})
++  # Lets sysbuild targets, such as the merged hex, depend on the file.
++  set(BYPRODUCT_NRF71_WIFI_MERGED_HEX_NAME ${merged_hex} CACHE FILEPATH "nRF7120 merged hex" FORCE)
+ endif()
+ 
+ # Flash runner override

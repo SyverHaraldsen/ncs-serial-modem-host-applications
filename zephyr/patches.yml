@@ -1,0 +1,34 @@
+patches:
+  - path: nRF7120/0001-zephyr-soc-nordic-nrf71-uicr-declare-hex-as-sysbuild-byproduct.patch
+    sha256sum: e7f855bd8d37ac226d7ca8485da50cd967af9ed5f1471fd5222ae058b066bcdb
+    module: zephyr
+    author: Syver Haraldsen
+    email: syver.haraldsen@nordicsemi.no
+    date: 2026-11-12
+    upstreamable: true
+    comments: |
+      The nRF71 UICR image did not declare its hex as a BYPRODUCT_ cache
+      variable, so SB_CONFIG_MERGED_HEX_FILES failed with "no known rule to
+      make uicr/zephyr/zephyr.hex".
+  - path: nRF7120/0002-edge-ai-axon-platform-handle-nrf7120e-like-nrf7120.patch
+    sha256sum: cf14d27f3fede364f80d59b102ce0f972394402ac839e929a4478b64f5dc32af
+    module: edge-ai
+    author: Syver Haraldsen
+    email: syver.haraldsen@nordicsemi.no
+    date: 2026-11-12
+    upstreamable: true
+    comments: |
+      The Axon platform only checked CONFIG_SOC_NRF7120, so on the nRF7120E,
+      which defines CONFIG_SOC_NRF7120E instead, MRAM auto power-down stayed
+      enabled while the NPU read model weights from MRAM.
+  - path: nRF7120/0003-nrfxlib-nrf71_wifi-declare-merged-hex-as-sysbuild-byproduct.patch
+    sha256sum: e9674b468b2194efac5392e1b23a98b0b401e80e466a51e6d98c8bb4deb92bbd
+    module: nrfxlib
+    author: Syver Haraldsen
+    email: syver.haraldsen@nordicsemi.no
+    date: 2026-11-12
+    upstreamable: true
+    comments: |
+      CONFIG_WIFI_NRF71_PATCH points the flash runner at zephyr.nrf7120.hex
+      without declaring it as a BYPRODUCT_ cache variable, so
+      SB_CONFIG_MERGED_HEX_FILES failed with "no known rule to make it".

@@ -1,0 +1,4 @@
+JPEGDEC 1.8.5 (Apache-2.0) by Larry Bank, https://github.com/bitbank2/JPEGDEC
+commit 0e879642e5e68624687f9ade16d799a091298ec8, files src/JPEGDEC.h and src/jpeg.inl.
+Only change: the plain C headers and C API, guarded for desktop builds, are also
+taken when __ZEPHYR__ is defined.

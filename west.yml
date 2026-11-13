@@ -13,5 +13,13 @@ manifest:
     - name: nrf
       remote: ncs
       repo-path: sdk-nrf
-      revision: v3.5.0-preview2
+      revision: v3.5.0-preview3
       import: true
+
+    # Axon NPU driver and models. Pinned to sdk-edge-ai PR #181 while it moved the
+    # add-on to v3.5.0-preview3; switch to a release tag once it is merged.
+    - name: edge-ai
+      remote: ncs
+      repo-path: sdk-edge-ai
+      revision: 734fb65e3d7980045072a8cfc33e756bed19f1a5
+      path: edge-ai

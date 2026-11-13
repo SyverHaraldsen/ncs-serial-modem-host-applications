@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "Main"
+
+config APP_MAIN_WATCHDOG_TIMEOUT_SECONDS
+	int "Watchdog timeout"
+	default 30
+	help
+	  The module only publishes requests in its handlers and never blocks.
+
+config APP_MAIN_MSG_PROCESSING_TIMEOUT_SECONDS
+	int "Maximum message processing time"
+	default 5
+
+config APP_MAIN_SWITCH_TIMEOUT_SECONDS
+	int "Interface switch timeout"
+	default 180
+	help
+	  How long "network use <iface>" waits for the new interface to come up before
+	  it gives up and keeps streaming over the current one. LTE attach can take
+	  tens of seconds.
+
+module = APP_MAIN
+module-str = Main
+source "subsys/logging/Kconfig.template.log_config"
+
+endmenu

@@ -1,0 +1,20 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menuconfig APP_FRAME_POOL
+	bool "Frame chunk pool"
+	default y
+	help
+	  Datagram-sized buffers through which the camera and detection modules
+	  hand frame slices to the stream module, outside zbus.
+
+if APP_FRAME_POOL
+
+config APP_FRAME_POOL_CHUNK_COUNT
+	int "Frame chunk buffers"
+	default 4
+
+endif

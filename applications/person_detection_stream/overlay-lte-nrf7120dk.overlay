@@ -1,0 +1,79 @@
+/*
+ * Copyright (c) 2026 Nordic Semiconductor ASA
+ *
+ * SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+ *
+ * nRF7120 DK driving an nRF93M1 DK in modem bypass mode over UARTE00 at 3 Mbaud, next
+ * to Wi-Fi. Build with
+ *   -DEXTRA_CONF_FILE=overlay-lte-nrf7120dk.conf
+ *   -DEXTRA_DTC_OVERLAY_FILE=overlay-lte-nrf7120dk.overlay
+ * and set the modem first with AT+IPR=3000000, which it keeps in NVM. The DK runs at
+ * 1.8 V like the modem, so the lines connect directly.
+ *
+ * UARTE00 runs from the 256 MHz HFPLL and only reaches dedicated pins on P2. The DK
+ * shares P2.06-P2.11 with its external memory; route them to the P2 header in Board
+ * Configurator.
+ *
+ *   93M1 DK          7120 DK
+ *   TX         ->    P2.10  UARTE00 RX
+ *   RX         <-    P2.07  UARTE00 TX
+ *   RTS        ->    P2.08  UARTE00 CTS
+ *   CTS        <-    P2.11  UARTE00 RTS
+ *   PKEY       <-    P0.10  (P0.05 is the DK's RF switch control)
+ *   RST        <-    P0.06
+ */
+
+/* UARTE00 shares its instance with SPIM00, which drives the DK's external flash (unused). */
+&spi00 {
+	status = "disabled";
+};
+
+/ {
+	aliases {
+		modem = &modem;
+	};
+};
+
+&pinctrl {
+	uart00_modem_default: uart00_modem_default {
+		group1 {
+			psels = <NRF_PSEL(UART_TX, 2, 7)>,
+				<NRF_PSEL(UART_RTS, 2, 11)>;
+		};
+
+		group2 {
+			psels = <NRF_PSEL(UART_RX, 2, 10)>,
+				<NRF_PSEL(UART_CTS, 2, 8)>;
+			bias-pull-up;
+		};
+	};
+
+	uart00_modem_sleep: uart00_modem_sleep {
+		group1 {
+			psels = <NRF_PSEL(UART_TX, 2, 7)>,
+				<NRF_PSEL(UART_RX, 2, 10)>,
+				<NRF_PSEL(UART_RTS, 2, 11)>,
+				<NRF_PSEL(UART_CTS, 2, 8)>;
+			low-power-enable;
+		};
+	};
+};
+
+/* The binding has no 3000000; CONFIG_APP_NETWORK_MODEM_BAUDRATE sets it at boot. */
+&uart00 {
+	status = "okay";
+	current-speed = <4000000>;
+	pinctrl-0 = <&uart00_modem_default>;
+	pinctrl-1 = <&uart00_modem_sleep>;
+	pinctrl-names = "default", "sleep";
+	hw-flow-control;
+	zephyr,pm-device-runtime-auto;
+
+	modem: modem {
+		compatible = "nordic,nrf93m1";
+		status = "okay";
+		mdm-power-gpios = <&gpio0 10 GPIO_ACTIVE_LOW>;
+		mdm-reset-gpios = <&gpio0 6 GPIO_ACTIVE_LOW>;
+		zephyr,pm-device-runtime-auto;
+	};
+};

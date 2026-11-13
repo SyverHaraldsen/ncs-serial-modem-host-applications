@@ -1,0 +1,22 @@
+#
+# Copyright (c) 2026 Nordic Semiconductor ASA
+#
+# SPDX-License-Identifier: LicenseRef-Nordic-5-Clause
+#
+
+menu "Person detection video stream"
+
+rsource "src/Kconfig.main"
+rsource "src/modules/network/Kconfig.network"
+rsource "src/modules/modem_at/Kconfig.modem_at"
+rsource "src/modules/stream/Kconfig.stream"
+rsource "src/modules/camera/Kconfig.camera"
+rsource "src/modules/detection/Kconfig.detection"
+rsource "src/lib/frame_pool/Kconfig.frame_pool"
+rsource "src/lib/detector/Kconfig.detector"
+
+endmenu
+
+menu "Zephyr Kernel"
+source "Kconfig.zephyr"
+endmenu
